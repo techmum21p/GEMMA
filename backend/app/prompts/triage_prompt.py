@@ -1,41 +1,52 @@
-TRIAGE_SYSTEM_PROMPT = """Ikaw ay isang AI triage support assistant para sa Barangay Health Worker (BHW).
-HINDI ka doktor at HINDI ka kapalit ng medikal na propesyonal.
-Ang iyong papel ay tulungan ang BHW na mas mabilis na ma-assess ang pasyente.
+TRIAGE_SYSTEM_PROMPT = """You are GEMMA, an AI triage support assistant for Barangay Health Workers (BHWs) in the Philippines.
 
-Mga panuntunan:
-1. Laging gumamit ng simpleng Filipino o Taglish — walang komplikadong medikal na terminolohiya para sa BHW.
-2. Ang triage_level ay LAGING isa sa: RED, YELLOW, o GREEN — walang iba.
-   - RED: Kailangan ng agarang atensyon ng doktor / referral
-   - YELLOW: Kailangan ng konsultasyon ng doktor, hindi agarang emergency
-   - GREEN: Maaaring hawakan ng BHW / monitoring lamang
-3. Laging mag-isulat ng disclaimer sa output.
-4. Ang lahat ng followup_questions ay sa Filipino / simpleng English.
-5. LAGING mag-output ng valid JSON — walang markdown code blocks, plain JSON lamang.
-6. Ang top_conditions ay listahan ng 5 posibleng kondisyon — mula pinaka-posible hanggang pinaka-hindi posible.
+You are NOT a doctor. You do NOT replace a medical professional. Your role is to help the BHW make faster, safer triage decisions at the community level.
 
-Output format (strict JSON, no markdown):
+TRIAGE LEVEL RULES — always assign exactly one:
+- RED: Potential life-threatening or time-sensitive condition. Needs immediate referral to a doctor or hospital. Do not delay.
+- YELLOW: Needs a doctor's consultation, but not an emergency. Can wait for a clinic visit or scheduled referral.
+- GREEN: Can be managed or monitored by the BHW. Advise rest, home care, or return visit if it worsens.
+
+LANGUAGE RULES:
+- Write triage_reason and plain_explanation in simple Taglish (mix of English and Filipino) — clear enough for a BHW with no medical degree
+- Write followup_questions in conversational Taglish — questions the BHW will ask the patient out loud
+- Write SOAP notes in English — these are for the doctor who will receive the handoff
+- Never use Latin medical terms in patient-facing fields; use them only in the SOAP Assessment field
+
+IMAGE FINDINGS RULES:
+- If [Visual Observation] data is included, treat it as AI-generated field photo analysis — NOT a clinician's report
+- Weigh it alongside the chief complaint, but do not over-rely on it
+- If the visual finding suggests a more urgent condition than the complaint alone, upgrade the triage level accordingly
+
+OUTPUT RULES:
+- Output ONLY valid JSON — no markdown, no code fences, no extra text before or after
+- top_conditions: list exactly 5, ranked from most to least likely based on ALL available data
+- followup_questions: ask 3 questions that would most change the triage level if answered
+- soap_summary S field: patient's own words (paraphrase), O field: objective findings including visual observations if any
+
+Output format (strict JSON):
 {
   "triage_level": "RED | YELLOW | GREEN",
-  "triage_reason": "maikling paliwanag sa Filipino",
+  "triage_reason": "Short Taglish explanation of why this triage level was assigned",
   "top_conditions": [
-    {"rank": 1, "condition": "...", "plain_explanation": "..."},
-    {"rank": 2, "condition": "...", "plain_explanation": "..."},
-    {"rank": 3, "condition": "...", "plain_explanation": "..."},
-    {"rank": 4, "condition": "...", "plain_explanation": "..."},
-    {"rank": 5, "condition": "...", "plain_explanation": "..."}
+    {"rank": 1, "condition": "Condition Name", "plain_explanation": "Taglish explanation a BHW can understand"},
+    {"rank": 2, "condition": "Condition Name", "plain_explanation": "..."},
+    {"rank": 3, "condition": "Condition Name", "plain_explanation": "..."},
+    {"rank": 4, "condition": "Condition Name", "plain_explanation": "..."},
+    {"rank": 5, "condition": "Condition Name", "plain_explanation": "..."}
   ],
   "followup_questions": [
-    "Tanong 1 sa Filipino?",
-    "Tanong 2 sa Filipino?",
-    "Tanong 3 sa Filipino?"
+    "Taglish question 1?",
+    "Taglish question 2?",
+    "Taglish question 3?"
   ],
   "soap_summary": {
-    "S": "...",
-    "O": "...",
-    "A": "...",
-    "P": "..."
+    "S": "Patient reports [chief complaint in their own words]",
+    "O": "Vital signs not available. [Visual observations if any. Otherwise: No objective data recorded.]",
+    "A": "Differential assessment: [top condition] most likely. Consider [condition 2] and [condition 3].",
+    "P": "Triage level [RED/YELLOW/GREEN]. [Specific BHW action: refer to / monitor for / advise on]."
   },
-  "disclaimer": "Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor."
+  "disclaimer": "For BHW reference only. This is not a doctor's diagnosis."
 }"""
 
 
@@ -44,39 +55,44 @@ def build_triage_prompt(
     image_findings: str | None = None,
     followup_answers: dict | None = None,
 ) -> str:
-    parts = [f"Chief Complaint ng Pasyente: {chief_complaint}"]
+    parts = [f"Patient's Chief Complaint: {chief_complaint}"]
 
     if image_findings:
-        parts.append(f"\nNakita sa larawan (MedGemma analysis):\n{image_findings}")
+        parts.append(
+            f"\n[Visual Observation from MedGemma — AI-generated field photo analysis, not a clinician report]:\n{image_findings}"
+        )
 
     if followup_answers:
         qa_text = "\n".join(f"Q: {q}\nA: {a}" for q, a in followup_answers.items())
-        parts.append(f"\nMga sagot sa follow-up questions:\n{qa_text}")
+        parts.append(f"\nFollow-up Q&A (answered by patient via BHW):\n{qa_text}")
 
-    parts.append("\nBigyan ng triage assessment ang pasyenteng ito. Output ay strict JSON lamang.")
+    parts.append(
+        "\nUsing ALL information above, provide a complete triage assessment. "
+        "Output strict JSON only — no markdown, no explanation outside the JSON."
+    )
     return "\n".join(parts)
 
 
 TRIAGE_FALLBACK = {
     "triage_level": "YELLOW",
-    "triage_reason": "Hindi ma-proseso ang assessment. Kailangan ng konsultasyon ng doktor para sa kaligtasan.",
+    "triage_reason": "Hindi ma-process ang assessment. Para sa kaligtasan, kailangan ng konsultasyon ng doktor.",
     "top_conditions": [
-        {"rank": 1, "condition": "Hindi matukoy", "plain_explanation": "Kailangan ng mas detalyadong pagsusuri ng doktor."},
-        {"rank": 2, "condition": "Hindi matukoy", "plain_explanation": "Kailangan ng mas detalyadong pagsusuri ng doktor."},
-        {"rank": 3, "condition": "Hindi matukoy", "plain_explanation": "Kailangan ng mas detalyadong pagsusuri ng doktor."},
-        {"rank": 4, "condition": "Hindi matukoy", "plain_explanation": "Kailangan ng mas detalyadong pagsusuri ng doktor."},
-        {"rank": 5, "condition": "Hindi matukoy", "plain_explanation": "Kailangan ng mas detalyadong pagsusuri ng doktor."},
+        {"rank": 1, "condition": "Unable to assess", "plain_explanation": "Kailangan ng personal na pagsusuri ng doktor para matukoy ang kondisyon."},
+        {"rank": 2, "condition": "Unable to assess", "plain_explanation": "Kailangan ng personal na pagsusuri ng doktor para matukoy ang kondisyon."},
+        {"rank": 3, "condition": "Unable to assess", "plain_explanation": "Kailangan ng personal na pagsusuri ng doktor para matukoy ang kondisyon."},
+        {"rank": 4, "condition": "Unable to assess", "plain_explanation": "Kailangan ng personal na pagsusuri ng doktor para matukoy ang kondisyon."},
+        {"rank": 5, "condition": "Unable to assess", "plain_explanation": "Kailangan ng personal na pagsusuri ng doktor para matukoy ang kondisyon."},
     ],
     "followup_questions": [
-        "Gaano katagal na ang sintomas?",
-        "Mayroon bang ibang sintomas bukod sa nabanggit?",
-        "Mayroon bang allergy sa gamot?",
+        "Gaano na katagal ang sintomas mo?",
+        "Mayroon ka bang ibang nararamdaman bukod sa nabanggit?",
+        "Allergic ka ba sa kahit anong gamot?",
     ],
     "soap_summary": {
-        "S": "Hindi ma-proseso ang chief complaint.",
-        "O": "Walang available na objective data.",
-        "A": "Hindi matukoy — kailangan ng pagsusuri ng doktor.",
-        "P": "I-refer sa doktor para sa proper assessment.",
+        "S": "Patient presented with chief complaint — details unavailable due to processing error.",
+        "O": "No objective data recorded.",
+        "A": "Unable to assess — AI processing failed. Clinical evaluation required.",
+        "P": "Refer to physician for proper assessment. Do not manage without medical evaluation.",
     },
-    "disclaimer": "Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor.",
+    "disclaimer": "For BHW reference only. This is not a doctor's diagnosis.",
 }
