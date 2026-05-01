@@ -19,16 +19,30 @@ _Last updated: 2026-05-01_
 - Fixed startup crash: `greenlet==3.5.0` added (required by SQLAlchemy async engine)
 - All packages confirmed installed in `/Users/aireesm4/Python_Projects/venv_gemma`
 
-### Git
+### Git & Repo
 - `.gitignore` created — excludes `.env`, `*.db`, `__pycache__`, generated exports, venv
 - Local git repo initialized, initial commit on `main` branch
+- `SESSION_NOTES.md` added and committed
 - **Not yet pushed to GitHub**
+
+### AI Prompts (MedGemma paper-informed)
+- Read MedGemma paper (arxiv 2507.05201) — key insight: model is trained heavily on radiology, not field photos
+- Updated `backend/app/prompts/image_prompt.py`:
+  - Grounds MedGemma in field photo context (not clinical/radiology)
+  - Structured observation format: Location → Appearance → Size → Skin → Discharge → Impression
+  - Output explicitly labeled as AI-generated visual observation
+- Updated `backend/app/prompts/triage_prompt.py`:
+  - SOAP notes in English (for receiving doctor), triage reason + conditions in Taglish (for BHW)
+  - Image findings injected as `[Visual Observation from MedGemma]` with AI-generated warning
+  - Added rule: upgrade triage level if visual findings suggest more urgency than complaint alone
+  - Follow-up questions now target answers that would change the triage level
+  - Fallback response is cleaner and more actionable
 
 ---
 
 ## Next Steps
 
-1. **Push repo to GitHub**
+1. **Push repo to GitHub** ← do this first
    - Create empty repo at github.com (no README/gitignore)
    - Run:
      ```bash
@@ -38,7 +52,8 @@ _Last updated: 2026-05-01_
 
 2. **UI Redesign**
    - Waiting on Google Stitch screens (blue/Maxicare-inspired colorway)
-   - Changes planned: symptom checklist chips, bullet-entry text field, icons, English-first Taglish labels
+   - Stitch prompt already written — screens being generated
+   - Changes planned: symptom checklist chips, bullet-entry for custom symptoms, icons, English-first Taglish, fully responsive (mobile-first, scales to desktop)
    - Once Stitch screens are ready → update `frontend/templates/index.html` + `frontend/static/js/app.js`
 
 3. **AI Pipeline Test**
