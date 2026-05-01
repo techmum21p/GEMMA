@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="fil">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1B3A6B" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>GEMMA — Triage Assistant</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/static/icons/icon-192.png" />
+  <link rel="stylesheet" href="/static/css/app.css" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy:   '#1B3A6B',
+            forest: '#2D6A2D',
+            gold:   '#F5C518',
+            danger: '#C0392B',
+            amber:  '#E67E22',
+            light:  '#F0F4F8',
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-light min-h-screen font-sans">
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- APP HEADER (visible on all screens except home)               -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<header id="app-header" class="hidden bg-navy text-white px-4 py-3 flex items-center justify-between shadow-md sticky top-0 z-50">
+  <div class="flex items-center gap-3">
+    <button id="btn-back" onclick="goBack()" class="text-white text-2xl leading-none p-1">&#8592;</button>
+    <div>
+      <div class="font-bold text-lg leading-tight">GEMMA</div>
+      <div id="header-subtitle" class="text-xs text-blue-200">Triage Assistant</div>
+    </div>
+  </div>
+  <div id="shift-info-header" class="text-right text-xs text-blue-200 hidden">
+    <div id="header-bhw-name"></div>
+    <div id="header-patient-count" class="font-bold text-white"></div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 1: HOME — Shift Start                                   -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="screen-home" data-screen class="screen-active min-h-screen flex flex-col">
+  <div class="bg-navy text-white px-6 pt-10 pb-8 text-center">
+    <div class="text-4xl mb-2">🏥</div>
+    <h1 class="text-3xl font-bold">GEMMA</h1>
+    <p class="text-blue-200 text-sm mt-1">Guided Emergency & Medical Management Assistant</p>
+    <p class="text-blue-300 text-xs mt-1">Barangay Platero Health Center, City of Biñan</p>
+  </div>
+
+  <div class="flex-1 px-5 py-6 flex flex-col gap-5">
+    <div class="bg-white rounded-2xl shadow p-5">
+      <h2 class="text-navy font-bold text-lg mb-4">Simulan ang Shift</h2>
+
+      <div class="mb-4">
+        <label class="block text-sm font-semibold text-gray-600 mb-1">Pangalan ng BHW</label>
+        <input id="input-bhw-name"
+          type="text" placeholder="Ilagay ang inyong pangalan..."
+          class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-lg focus:border-navy focus:outline-none" />
+      </div>
+
+      <div class="mb-5">
+        <label class="block text-sm font-semibold text-gray-600 mb-1">Email ng Coordinator</label>
+        <input id="input-coordinator-email"
+          type="email" placeholder="coordinator@health.gov.ph"
+          class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-lg focus:border-navy focus:outline-none" />
+      </div>
+
+      <button onclick="startShift()"
+        class="w-full bg-navy text-white font-bold text-xl py-4 rounded-2xl active:scale-95 transition-transform shadow-lg">
+        ▶ Simulan ang Shift
+      </button>
+    </div>
+
+    <div class="text-center text-xs text-gray-400 px-4">
+      Hindi kapalit ng doktor o BHW — gabay lamang para sa mas mabilis na serbisyo.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 2: INTAKE — New Patient                                 -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="screen-intake" data-screen class="hidden min-h-screen flex flex-col">
+  <div class="px-5 py-5 flex flex-col gap-4 flex-1">
+
+    <div class="bg-white rounded-2xl shadow p-5">
+      <h2 class="text-navy font-bold text-lg mb-4">Bagong Pasyente</h2>
+
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1">Pangalan <span class="text-gray-400">(opsyonal)</span></label>
+          <input id="input-name" type="text" placeholder="Juan dela Cruz"
+            class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-base focus:border-navy focus:outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1">Edad</label>
+          <input id="input-age" type="number" placeholder="25" min="0" max="120"
+            class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-base focus:border-navy focus:outline-none" />
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-500 mb-1">Kasarian</label>
+        <div class="flex gap-3">
+          <label class="flex-1 flex items-center justify-center gap-2 border-2 border-gray-200 rounded-xl py-2 cursor-pointer has-[:checked]:border-navy has-[:checked]:bg-blue-50">
+            <input type="radio" name="sex" value="M" class="accent-navy" /> <span class="font-semibold">Lalaki</span>
+          </label>
+          <label class="flex-1 flex items-center justify-center gap-2 border-2 border-gray-200 rounded-xl py-2 cursor-pointer has-[:checked]:border-navy has-[:checked]:bg-blue-50">
+            <input type="radio" name="sex" value="F" class="accent-navy" /> <span class="font-semibold">Babae</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-semibold text-gray-600 mb-1">Chief Complaint <span class="text-red-500">*</span></label>
+        <textarea id="input-complaint"
+          placeholder="Ilarawan ang sintomas ng pasyente... (hal: Masakit ang ulo, may lagnat, at nagsusuka mula kahapon.)"
+          rows="4"
+          class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-base focus:border-navy focus:outline-none resize-none"></textarea>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow p-5">
+      <h3 class="text-navy font-bold mb-3">Larawan ng Kondisyon</h3>
+      <p class="text-gray-500 text-sm mb-3">Opsyonal — para sa nakikitang sugat, pantal, pamamaga, atbp.</p>
+
+      <div id="camera-preview-container" class="hidden mb-3">
+        <img id="camera-preview" src="" alt="Captured image" class="w-full rounded-xl object-cover max-h-48" />
+        <button onclick="clearPhoto()" class="mt-2 text-sm text-red-500 underline">✕ Alisin ang larawan</button>
+      </div>
+
+      <div class="flex gap-3">
+        <button onclick="openCamera()"
+          class="flex-1 bg-forest text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform">
+          📷 Kumuha ng Larawan
+        </button>
+        <label class="flex-1 bg-gray-100 text-gray-700 font-bold py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+          📁 Pumili ng File
+          <input id="file-input" type="file" accept="image/*" class="hidden" onchange="handleFileSelect(event)" />
+        </label>
+      </div>
+    </div>
+
+    <button onclick="submitTriage()"
+      id="btn-triage-submit"
+      class="w-full bg-navy text-white font-bold text-xl py-4 rounded-2xl active:scale-95 transition-transform shadow-lg">
+      🔍 I-Triage ang Pasyente
+    </button>
+
+    <button onclick="showScreen('screen-log')"
+      class="w-full bg-white border-2 border-navy text-navy font-bold py-3 rounded-2xl">
+      📋 Tingnan ang Patient Log
+    </button>
+  </div>
+
+  <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleCameraCapture(event)" />
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- LOADING SCREEN                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="screen-loading" data-screen class="hidden min-h-screen flex flex-col items-center justify-center bg-light">
+  <div class="text-center px-8">
+    <div class="text-6xl mb-6 animate-pulse">🏥</div>
+    <div class="text-navy font-bold text-xl mb-2">Sinusuri ang pasyente...</div>
+    <div class="text-gray-500 text-sm mb-6" id="loading-message">Hinihintay ang sagot ng GEMMA AI...</div>
+    <div class="flex justify-center gap-1">
+      <div class="w-3 h-3 bg-navy rounded-full animate-bounce" style="animation-delay:0ms"></div>
+      <div class="w-3 h-3 bg-navy rounded-full animate-bounce" style="animation-delay:150ms"></div>
+      <div class="w-3 h-3 bg-navy rounded-full animate-bounce" style="animation-delay:300ms"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 3: RESULT — Triage Output                               -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="screen-result" data-screen class="hidden flex flex-col">
+  <div class="px-5 py-5 flex flex-col gap-4">
+
+    <!-- Triage badge -->
+    <div id="triage-badge-container" class="rounded-2xl shadow p-5 text-center text-white">
+      <div class="text-sm font-semibold opacity-80 mb-1">Triage Level</div>
+      <div id="triage-level-text" class="text-5xl font-black tracking-wide">—</div>
+      <div id="triage-reason-text" class="text-sm mt-2 opacity-90"></div>
+    </div>
+
+    <!-- Top 5 conditions -->
+    <div class="bg-white rounded-2xl shadow p-5">
+      <h3 class="text-navy font-bold text-base mb-3">Top 5 Posibleng Kondisyon</h3>
+      <div id="conditions-list" class="flex flex-col gap-2"></div>
+      <div class="mt-3 bg-yellow-50 border border-gold rounded-xl p-3 text-xs text-yellow-800">
+        ⚠️ <strong>Disclaimer:</strong> Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor.
+      </div>
+    </div>
+
+    <!-- Follow-up questions -->
+    <div class="bg-white rounded-2xl shadow p-5">
+      <h3 class="text-navy font-bold text-base mb-3">Mga Follow-Up na Tanong</h3>
+      <p class="text-gray-500 text-xs mb-3">Itanong sa pasyente at isulat ang sagot:</p>
+      <div id="followup-questions-list" class="flex flex-col gap-3"></div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="flex flex-col gap-3">
+      <button onclick="refineWithFollowup()"
+        class="w-full bg-navy text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
+        🔄 I-Refine ang Assessment
+      </button>
+      <button onclick="proceedToSummary()"
+        class="w-full bg-forest text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
+        ✅ Tanggapin at I-Save
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 4: SUMMARY — SOAP + PDF                                 -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="screen-summary" data-screen class="hidden flex flex-col">
+  <div class="px-5 py-5 flex flex-col gap-4">
+
+    <div class="bg-white rounded-2xl shadow p-5">
+      <h3 class="text-navy font-bold text-base mb-1">Doctor Handoff Summary</h3>
+      <p class="text-gray-400 text-xs mb-4">SOAP-lite note para ibigay sa doktor</p>
+
+      <div class="flex flex-col gap-3">
+        <div class="soap-section">
+          <div class="text-xs font-bold text-navy uppercase mb-1">S — Subjective</div>
+          <div id="soap-s" class="text-sm text-gray-700 bg-light rounded-xl px-3 py-2"></div>
+        </div>
+        <div class="soap-section">
+          <div class="text-xs font-bold text-navy uppercase mb-1">O — Objective</div>
+          <div id="soap-o" class="text-sm text-gray-700 bg-light rounded-xl px-3 py-2"></div>
+        </div>
+        <div class="soap-section">
+          <div class="text-xs font-bold text-navy uppercase mb-1">A — Assessment</div>
+          <div id="soap-a" class="text-sm text-gray-700 bg-light rounded-xl px-3 py-2"></div>
+        </div>
+        <div class="soap-section">
+          <div class="text-xs font-bold text-navy uppercase mb-1">P — Plan</div>
+          <div id="soap-p" class="text-sm text-gray-700 bg-light rounded-xl px-3 py-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="image-findings-card" class="bg-white rounded-2xl shadow p-5 hidden">
+      <h3 class="text-navy font-bold text-base mb-2">Nakita sa Larawan</h3>
+      <p id="image-findings-text" class="text-sm text-gray-700"></p>
+    </div>
+
+    <div class="flex flex-col gap-3">
+      <button onclick="generatePDF()"
+        id="btn-generate-pdf"
+        class="w-full bg-amber text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
+        📄 I-Generate ang PDF
+      </button>
+      <button onclick="saveAndNewPatient()"
+        class="w-full bg-navy text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
+        ➕ Susunod na Pasyente
+      </button>
+      <button onclick="showScreen('screen-log')"
+        class="w-full bg-white border-2 border-navy text-navy font-bold py-3 rounded-2xl">
+        📋 Patient Log
+      </button>
+    </div>
+
+    <div class="bg-yellow-50 border border-gold rounded-xl p-3 text-xs text-yellow-800 text-center">
+      ⚠️ Hindi kapalit ng doktor ang GEMMA — gabay lamang.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 5: LOG — Patient Table                                  -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="screen-log" data-screen class="hidden flex flex-col">
+  <div class="px-4 py-4 flex flex-col gap-3">
+
+    <div class="flex items-center justify-between">
+      <h2 class="text-navy font-bold text-lg">Patient Log</h2>
+      <button onclick="refreshPatientLog()" class="text-navy text-sm underline">⟳ I-refresh</button>
+    </div>
+
+    <div id="log-stats" class="grid grid-cols-3 gap-2">
+      <div class="bg-danger text-white rounded-xl p-3 text-center">
+        <div id="stat-red" class="text-2xl font-black">0</div>
+        <div class="text-xs">RED</div>
+      </div>
+      <div class="bg-amber text-white rounded-xl p-3 text-center">
+        <div id="stat-yellow" class="text-2xl font-black">0</div>
+        <div class="text-xs">YELLOW</div>
+      </div>
+      <div class="bg-forest text-white rounded-xl p-3 text-center">
+        <div id="stat-green" class="text-2xl font-black">0</div>
+        <div class="text-xs">GREEN</div>
+      </div>
+    </div>
+
+    <div id="patient-log-list" class="flex flex-col gap-2"></div>
+
+    <div id="log-empty" class="hidden text-center py-10 text-gray-400">
+      <div class="text-4xl mb-2">📋</div>
+      <div>Walang pasyente pa sa shift na ito.</div>
+    </div>
+
+    <div class="flex flex-col gap-3 mt-2">
+      <button onclick="showScreen('screen-intake')"
+        class="w-full bg-navy text-white font-bold py-4 rounded-2xl text-lg">
+        ➕ Bagong Pasyente
+      </button>
+      <button onclick="showScreen('screen-endshift')"
+        class="w-full bg-danger text-white font-bold py-4 rounded-2xl text-lg">
+        🔴 Tapusin ang Shift
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 6: END SHIFT                                            -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="screen-endshift" data-screen class="hidden flex flex-col">
+  <div class="px-5 py-5 flex flex-col gap-4">
+
+    <div class="bg-white rounded-2xl shadow p-5 text-center">
+      <div class="text-4xl mb-2">📊</div>
+      <h2 class="text-navy font-bold text-xl">Buod ng Shift</h2>
+      <div id="endshift-bhw" class="text-gray-500 text-sm mt-1"></div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div class="bg-white rounded-2xl shadow p-4 text-center">
+        <div id="endshift-total" class="text-4xl font-black text-navy">0</div>
+        <div class="text-xs text-gray-500 mt-1">Kabuuang Pasyente</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-4">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-xs font-bold text-danger">RED</span>
+          <span id="endshift-red" class="text-lg font-black text-danger">0</span>
+        </div>
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-xs font-bold text-amber">YELLOW</span>
+          <span id="endshift-yellow" class="text-lg font-black text-amber">0</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-xs font-bold text-forest">GREEN</span>
+          <span id="endshift-green" class="text-lg font-black text-forest">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow p-5">
+      <h3 class="text-navy font-bold mb-2">Coordinator</h3>
+      <div id="endshift-email" class="text-gray-600 text-sm"></div>
+      <p class="text-gray-400 text-xs mt-2">Ang Excel report ay ipapadala sa email na ito.</p>
+    </div>
+
+    <div class="flex flex-col gap-3">
+      <a id="btn-download-excel" href="#" target="_blank"
+        class="w-full bg-forest text-white font-bold py-4 rounded-2xl text-lg text-center active:scale-95 transition-transform block">
+        📥 I-Download ang Excel Report
+      </a>
+      <button onclick="sendShiftEmail()"
+        id="btn-send-email"
+        class="w-full bg-navy text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
+        📧 Ipadala ang Report sa Email
+      </button>
+      <button onclick="confirmEndShift()"
+        class="w-full bg-danger text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
+        ✔ Tapusin ang Shift
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- TOAST NOTIFICATION                                             -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-lg z-50 transition-all duration-300 opacity-0 pointer-events-none max-w-xs text-center"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- BOTTOM NAV (visible when shift is active)                      -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<nav id="bottom-nav" class="hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex z-40">
+  <button onclick="showScreen('screen-intake')" class="flex-1 flex flex-col items-center py-3 text-gray-500 active:text-navy" id="nav-intake">
+    <span class="text-xl">➕</span>
+    <span class="text-xs mt-0.5">Pasyente</span>
+  </button>
+  <button onclick="showScreen('screen-log'); refreshPatientLog();" class="flex-1 flex flex-col items-center py-3 text-gray-500 active:text-navy" id="nav-log">
+    <span class="text-xl">📋</span>
+    <span class="text-xs mt-0.5">Log</span>
+  </button>
+  <button onclick="prepareEndShift(); showScreen('screen-endshift');" class="flex-1 flex flex-col items-center py-3 text-gray-500 active:text-navy" id="nav-end">
+    <span class="text-xl">🔴</span>
+    <span class="text-xs mt-0.5">Tapusin</span>
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- ERROR MODAL                                                    -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="error-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-6">
+  <div class="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full text-center">
+    <div class="text-4xl mb-3">⚠️</div>
+    <h3 class="text-navy font-bold text-lg mb-2">May Problema</h3>
+    <p id="error-message" class="text-gray-600 text-sm mb-4"></p>
+    <button onclick="closeErrorModal()" class="w-full bg-navy text-white font-bold py-3 rounded-xl">Sige, Nakaintindi</button>
+  </div>
+</div>
+
+<script src="/static/js/camera.js"></script>
+<script src="/static/js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/js/sw.js')
+        .then(reg => console.log('SW registered:', reg.scope))
+        .catch(err => console.warn('SW registration failed:', err));
+    });
+  }
+</script>
+</body>
+</html>

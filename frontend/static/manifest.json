@@ -1,0 +1,27 @@
+{
+  "name": "GEMMA — Triage Assistant",
+  "short_name": "GEMMA",
+  "description": "Guided Emergency & Medical Management Assistant para sa Barangay Health Workers",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F0F4F8",
+  "theme_color": "#1B3A6B",
+  "orientation": "portrait",
+  "lang": "fil",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["medical", "health", "productivity"],
+  "screenshots": []
+}
