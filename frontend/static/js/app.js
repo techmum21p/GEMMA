@@ -9,6 +9,7 @@ const state = {
   capturedImagePath: null,
   screenHistory: [],
   patients: [],
+  logFilter: 'ALL',
 };
 
 // ── Screen Management ──────────────────────────────────────────────────────
@@ -33,12 +34,12 @@ function showScreen(screenId, addToHistory = true) {
   const subtitle = document.getElementById('header-subtitle');
 
   const subtitles = {
-    'screen-intake': 'Bagong Pasyente',
-    'screen-result': 'Resulta ng Triage',
-    'screen-summary': 'Handoff Summary',
-    'screen-log': 'Patient Log',
-    'screen-endshift': 'Tapusin ang Shift',
-    'screen-loading': 'Sinusuri...',
+    'screen-intake':   'New Patient',
+    'screen-result':   'Triage Result',
+    'screen-summary':  'Handoff Summary',
+    'screen-log':      'Patient Log',
+    'screen-endshift': 'End Shift',
+    'screen-loading':  'Analyzing...',
   };
 
   if (screenId === 'screen-home') {
@@ -52,7 +53,7 @@ function showScreen(screenId, addToHistory = true) {
       bottomNav.classList.remove('hidden');
       document.getElementById('shift-info-header').classList.remove('hidden');
       document.getElementById('header-bhw-name').textContent = state.bhwName || '';
-      document.getElementById('header-patient-count').textContent = `${state.patients.length} pasyente`;
+      updatePatientCountBadge();
     }
   }
 
@@ -65,7 +66,78 @@ function goBack() {
   showScreen(prev, false);
 }
 
-// ── Toast ──────────────────────────────────────────────────────────────────
+function updatePatientCountBadge() {
+  const count = state.patients.length;
+  document.getElementById('header-patient-count').textContent = `${count} patient${count !== 1 ? 's' : ''}`;
+
+  const badge = document.getElementById('nav-patient-count');
+  if (count > 0) {
+    badge.textContent = count;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+// ── Loading Animation ──────────────────────────────────────────────────────
+let _loadingInterval = null;
+
+function startLoadingAnimation(hasImage = false) {
+  const messages = hasImage ? [
+    'Reading chief complaint...',
+    'Analyzing the photo with MedGemma...',
+    'Combining image and symptom data...',
+    'Running differential diagnosis...',
+    'Assigning triage level...',
+    'Writing follow-up questions...',
+    'Generating SOAP note...',
+    'Almost done...',
+  ] : [
+    'Reading chief complaint...',
+    'Running differential diagnosis...',
+    'Assigning triage level...',
+    'Ranking possible conditions...',
+    'Writing follow-up questions...',
+    'Generating SOAP note...',
+    'Almost done...',
+  ];
+
+  let elapsed = 0;
+  let msgIndex = 0;
+  const bar = document.getElementById('loading-bar');
+  const timer = document.getElementById('loading-timer');
+  const msg = document.getElementById('loading-message');
+
+  msg.textContent = messages[0];
+  bar.style.width = '5%';
+
+  _loadingInterval = setInterval(() => {
+    elapsed++;
+    timer.textContent = `${elapsed}s elapsed`;
+
+    // Advance message every ~5 seconds
+    const nextMsg = Math.min(Math.floor(elapsed / 5), messages.length - 1);
+    if (nextMsg !== msgIndex) {
+      msgIndex = nextMsg;
+      msg.textContent = messages[msgIndex];
+    }
+
+    // Progress bar: grows to 90% over 45 seconds, then stalls
+    const pct = Math.min(5 + (elapsed / 45) * 85, 90);
+    bar.style.width = `${pct}%`;
+  }, 1000);
+}
+
+function stopLoadingAnimation() {
+  if (_loadingInterval) {
+    clearInterval(_loadingInterval);
+    _loadingInterval = null;
+  }
+  const bar = document.getElementById('loading-bar');
+  if (bar) bar.style.width = '100%';
+}
+
+// ── Toast & Error ──────────────────────────────────────────────────────────
 function showToast(message, duration = 3000) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
@@ -86,20 +158,72 @@ function closeErrorModal() {
   document.getElementById('error-modal').classList.add('hidden');
 }
 
+// ── Chief Complaint — auto-bullet textarea ─────────────────────────────────
+(function initComplaintBullet() {
+  // Wait for DOM ready
+  document.addEventListener('DOMContentLoaded', () => {
+    const ta = document.getElementById('input-complaint');
+    if (!ta) return;
+
+    ta.addEventListener('focus', () => {
+      if (!ta.value.trim()) ta.value = '• ';
+    });
+
+    ta.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const pos   = ta.selectionStart;
+      const val   = ta.value;
+      const insert = '\n• ';
+      ta.value = val.slice(0, pos) + insert + val.slice(ta.selectionEnd);
+      ta.selectionStart = ta.selectionEnd = pos + insert.length;
+    });
+
+    // Backspace on an empty bullet line removes it
+    ta.addEventListener('keydown', e => {
+      if (e.key !== 'Backspace') return;
+      const pos = ta.selectionStart;
+      const val = ta.value;
+      if (pos >= 2 && val.slice(pos - 2, pos) === '• ') {
+        e.preventDefault();
+        ta.value = val.slice(0, pos - 2) + val.slice(pos);
+        ta.selectionStart = ta.selectionEnd = pos - 2;
+      }
+    });
+  });
+})();
+
+// Helper: read complaint textarea, strip bullet markers, return plain newline-separated text
+function readComplaint() {
+  const raw = document.getElementById('input-complaint').value;
+  return raw
+    .split('\n')
+    .map(l => l.replace(/^[•·\-]\s*/, '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+// Helper: render complaint text as bullet items into a container element
+function renderComplaintBullets(text, container) {
+  const lines = text.split('\n').filter(l => l.trim());
+  container.innerHTML = lines.map(l =>
+    `<div class="flex items-start gap-2">
+       <span class="text-navy font-bold leading-tight mt-0.5 select-none">•</span>
+       <span class="leading-snug">${l.trim()}</span>
+     </div>`
+  ).join('');
+}
+
 // ── Shift ──────────────────────────────────────────────────────────────────
 async function startShift() {
   const bhwName = document.getElementById('input-bhw-name').value.trim();
-  const email = document.getElementById('input-coordinator-email').value.trim();
-
-  if (!bhwName) { showError('Mangyaring ilagay ang pangalan ng BHW.'); return; }
-  if (!email || !email.includes('@')) { showError('Mangyaring maglagay ng valid na email ng coordinator.'); return; }
+  if (!bhwName) { showError('Please enter your BHW name to start the shift.'); return; }
 
   try {
-    const fd = new FormData();
     const res = await fetch('/api/shifts/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bhw_name: bhwName, coordinator_email: email }),
+      body: JSON.stringify({ bhw_name: bhwName, coordinator_email: '' }),
     });
 
     if (!res.ok) throw new Error(await res.text());
@@ -107,36 +231,47 @@ async function startShift() {
 
     state.shiftId = shift.id;
     state.bhwName = shift.bhw_name;
-    state.coordinatorEmail = shift.coordinator_email;
+    state.coordinatorEmail = '';
     state.screenHistory = ['screen-home'];
 
-    showToast(`Shift nagsimula! Maligayang pagdating, ${bhwName}!`);
+    clearIntakeForm();
+    showToast(`Shift started. Welcome, ${bhwName}!`);
     showScreen('screen-intake');
   } catch (err) {
-    showError(`Hindi ma-simulan ang shift: ${err.message}`);
+    showError(`Could not start shift: ${err.message}`);
   }
 }
 
 // ── Triage Submission ──────────────────────────────────────────────────────
 async function submitTriage() {
-  const complaint = document.getElementById('input-complaint').value.trim();
-  if (!complaint) { showError('Mangyaring ilarawan ang sintomas ng pasyente.'); return; }
+  const complaint = readComplaint();
+  if (!complaint) { showError('Please describe the patient\'s chief complaint.'); return; }
 
+  const hasImage = !!state.capturedImageFile;
   showScreen('screen-loading', true);
-  document.getElementById('loading-message').textContent = 'Hinihintay ang sagot ng GEMMA AI...';
+  startLoadingAnimation(hasImage);
 
   try {
+    const sexEl = document.querySelector('input[name="sex"]:checked');
+    const bpSys = document.getElementById('input-bp-sys')?.value.trim() || '';
+    const bpDia = document.getElementById('input-bp-dia')?.value.trim() || '';
+    const bp = bpSys && bpDia ? `${bpSys}/${bpDia}` : (bpSys || bpDia || '');
+
     const fd = new FormData();
     fd.append('chief_complaint', complaint);
     fd.append('followup_answers', '{}');
     fd.append('image_findings', '');
+    fd.append('bp',          bp);
+    fd.append('temperature', document.getElementById('input-temp')?.value.trim() || '');
+    fd.append('heart_rate',  document.getElementById('input-hr')?.value.trim()   || '');
+    fd.append('spo2',        document.getElementById('input-spo2')?.value.trim() || '');
+    fd.append('age',         document.getElementById('input-age')?.value.trim()  || '');
+    fd.append('sex',         sexEl ? sexEl.value : '');
 
     let endpoint = '/api/triage';
-
-    if (state.capturedImageFile) {
+    if (hasImage) {
       endpoint = '/api/triage/image';
       fd.append('image', state.capturedImageFile, state.capturedImageFile.name || 'photo.jpg');
-      document.getElementById('loading-message').textContent = 'Sinusuri ang larawan at sintomas...';
     }
 
     const res = await fetch(endpoint, { method: 'POST', body: fd });
@@ -151,27 +286,20 @@ async function submitTriage() {
       document.getElementById('image-findings-card').classList.remove('hidden');
     }
 
+    stopLoadingAnimation();
     renderTriageResult(result);
     showScreen('screen-result');
   } catch (err) {
+    stopLoadingAnimation();
     showScreen('screen-intake');
-    showError(`May problema sa triage: ${err.message}\n\nSiguraduhin na tumatakbo ang Ollama.`);
+    showError(`Triage failed: ${err.message}\n\nMake sure Ollama is running.`);
   }
 }
 
 function renderTriageResult(result) {
-  const level = result.triage_level || 'YELLOW';
-  const badge = document.getElementById('triage-badge-container');
-  const levelText = document.getElementById('triage-level-text');
-  const reasonText = document.getElementById('triage-reason-text');
-
-  badge.className = badge.className.replace(/bg-\w+/g, '');
-  const colors = { RED: 'bg-danger', YELLOW: 'bg-amber', GREEN: 'bg-forest' };
-  badge.classList.add(colors[level] || 'bg-amber', 'rounded-2xl', 'shadow', 'p-5', 'text-center', 'text-white');
-
-  const labels = { RED: '🔴 RED — Agarang Atensyon', YELLOW: '🟡 YELLOW — Konsultasyon', GREEN: '🟢 GREEN — Monitoring' };
-  levelText.textContent = labels[level] || level;
-  reasonText.textContent = result.triage_reason || '';
+  // Render chief complaint as bullet list
+  const complaintEl = document.getElementById('result-complaint-list');
+  if (complaintEl) renderComplaintBullets(readComplaint(), complaintEl);
 
   const condList = document.getElementById('conditions-list');
   condList.innerHTML = '';
@@ -179,10 +307,10 @@ function renderTriageResult(result) {
     const el = document.createElement('div');
     el.className = 'flex gap-3 items-start p-3 bg-light rounded-xl';
     el.innerHTML = `
-      <div class="bg-navy text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">${c.rank}</div>
+      <div class="bg-navy text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">${c.rank}</div>
       <div>
         <div class="font-semibold text-sm text-navy">${c.condition}</div>
-        <div class="text-xs text-gray-500 mt-0.5">${c.plain_explanation}</div>
+        <div class="text-xs text-gray-500 mt-0.5 leading-snug">${c.plain_explanation}</div>
       </div>`;
     condList.appendChild(el);
   });
@@ -191,39 +319,60 @@ function renderTriageResult(result) {
   fqList.innerHTML = '';
   (result.followup_questions || []).forEach((q, i) => {
     const el = document.createElement('div');
-    el.className = 'flex flex-col gap-1';
+    el.className = 'flex flex-col gap-1.5';
     el.innerHTML = `
       <label class="text-sm font-semibold text-gray-700">${i + 1}. ${q}</label>
-      <textarea id="fq-answer-${i}" rows="2" placeholder="Sagot ng pasyente..."
-        class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:border-navy focus:outline-none resize-none"></textarea>`;
+      <textarea id="fq-answer-${i}" rows="2" placeholder="Patient's answer..."
+        class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:border-navy focus:outline-none resize-none"></textarea>`;
     fqList.appendChild(el);
   });
 }
 
 async function refineWithFollowup() {
-  const complaint = document.getElementById('input-complaint').value.trim();
+  const complaint = readComplaint();
   const questions = state.currentTriageResult?.followup_questions || [];
   const answers = {};
 
   questions.forEach((q, i) => {
-    const ansEl = document.getElementById(`fq-answer-${i}`);
-    if (ansEl && ansEl.value.trim()) answers[q] = ansEl.value.trim();
+    const el = document.getElementById(`fq-answer-${i}`);
+    if (el && el.value.trim()) answers[q] = el.value.trim();
   });
 
   if (Object.keys(answers).length === 0) {
-    showToast('Mangyaring sagutin ang kahit isang tanong bago mag-refine.');
+    showToast('Please answer at least one question before updating.');
     return;
   }
 
   showScreen('screen-loading', true);
-  document.getElementById('loading-message').textContent = 'Nirerepormasyon ang assessment...';
+  startLoadingAnimation(false);
 
   try {
+    const sexElR = document.querySelector('input[name="sex"]:checked');
+    const bpSysR = document.getElementById('input-bp-sys')?.value.trim() || '';
+    const bpDiaR = document.getElementById('input-bp-dia')?.value.trim() || '';
+    const bpR = bpSysR && bpDiaR ? `${bpSysR}/${bpDiaR}` : (bpSysR || bpDiaR || '');
+
     const fd = new FormData();
     fd.append('chief_complaint', complaint);
     fd.append('followup_answers', JSON.stringify(answers));
     if (state.currentTriageResult?.image_findings) {
       fd.append('image_findings', state.currentTriageResult.image_findings);
+    }
+    fd.append('bp',          bpR);
+    fd.append('temperature', document.getElementById('input-temp')?.value.trim() || '');
+    fd.append('heart_rate',  document.getElementById('input-hr')?.value.trim()   || '');
+    fd.append('spo2',        document.getElementById('input-spo2')?.value.trim() || '');
+    fd.append('age',         document.getElementById('input-age')?.value.trim()  || '');
+    fd.append('sex',         sexElR ? sexElR.value : '');
+
+    // Pass initial assessment as context so Gemma can refine — not restart — the analysis
+    if (state.currentTriageResult) {
+      fd.append('initial_assessment', JSON.stringify({
+        triage_level:   state.currentTriageResult.triage_level,
+        triage_reason:  state.currentTriageResult.triage_reason,
+        top_conditions: state.currentTriageResult.top_conditions,
+        soap_summary:   state.currentTriageResult.soap_summary,
+      }));
     }
 
     const res = await fetch('/api/triage', { method: 'POST', body: fd });
@@ -231,11 +380,13 @@ async function refineWithFollowup() {
 
     const result = await res.json();
     state.currentTriageResult = result;
-    renderTriageResult(result);
-    showScreen('screen-result');
+    stopLoadingAnimation();
+    // Go straight to summary — answers have been incorporated, no need to loop
+    await proceedToSummary();
   } catch (err) {
+    stopLoadingAnimation();
     showScreen('screen-result');
-    showError(`Hindi ma-refine: ${err.message}`);
+    showError(`Could not update: ${err.message}`);
   }
 }
 
@@ -249,11 +400,18 @@ async function proceedToSummary() {
   document.getElementById('soap-a').textContent = soap.A || '';
   document.getElementById('soap-p').textContent = soap.P || '';
 
-  const complaint = document.getElementById('input-complaint').value.trim();
-  const name = document.getElementById('input-name').value.trim() || null;
-  const age = parseInt(document.getElementById('input-age').value) || null;
-  const sexEl = document.querySelector('input[name="sex"]:checked');
-  const sex = sexEl ? sexEl.value : null;
+  const complaint = readComplaint();
+  const name      = document.getElementById('input-name').value.trim() || null;
+  const age       = parseInt(document.getElementById('input-age').value) || null;
+  const address   = document.getElementById('input-address').value.trim() || null;
+  const bpSysP = document.getElementById('input-bp-sys')?.value.trim() || '';
+  const bpDiaP = document.getElementById('input-bp-dia')?.value.trim() || '';
+  const bp     = bpSysP && bpDiaP ? `${bpSysP}/${bpDiaP}` : (bpSysP || bpDiaP || null);
+  const temp       = document.getElementById('input-temp').value.trim() || null;
+  const heart_rate = document.getElementById('input-hr').value.trim()   || null;
+  const spo2       = document.getElementById('input-spo2').value.trim() || null;
+  const sexEl     = document.querySelector('input[name="sex"]:checked');
+  const sex       = sexEl ? sexEl.value : null;
 
   const questions = result.followup_questions || [];
   const followup_qa = {};
@@ -262,17 +420,55 @@ async function proceedToSummary() {
     if (el && el.value.trim()) followup_qa[q] = el.value.trim();
   });
 
+  // Age chip
+  const chipAge = document.getElementById('chip-age');
+  if (age) { chipAge.textContent = `${age}y`; chipAge.classList.remove('hidden'); }
+  else chipAge.classList.add('hidden');
+
+  // Sex chip
+  const chipSex = document.getElementById('chip-sex');
+  if (sex) { chipSex.textContent = sex === 'M' ? 'Male' : 'Female'; chipSex.classList.remove('hidden'); }
+  else chipSex.classList.add('hidden');
+
+  // Triage level chip (small pill in chips row)
+  const triageChipCfg = {
+    RED:    { bg: 'bg-danger',  label: '✱ RED TRIAGE' },
+    YELLOW: { bg: 'bg-amber',   label: '⚡ YELLOW TRIAGE' },
+    GREEN:  { bg: 'bg-forest',  label: '● GREEN TRIAGE' },
+  };
+  const tc = triageChipCfg[result.triage_level] || triageChipCfg.YELLOW;
+  const chipTriage = document.getElementById('chip-triage');
+  chipTriage.textContent = tc.label;
+  chipTriage.className = `text-white text-sm font-bold px-4 py-1.5 rounded-full flex items-center gap-1.5 ${tc.bg}`;
+
+  // Full-width verdict panel
+  const verdictCfg = {
+    RED:    { bg: 'bg-danger',  level: 'RED',    action: 'CRITICAL — Refer to RHU / Hospital Immediately' },
+    YELLOW: { bg: 'bg-amber',   level: 'YELLOW', action: 'URGENT — See Doctor On-Site at BHS' },
+    GREEN:  { bg: 'bg-forest',  level: 'GREEN',  action: 'STABLE — Home Care / BHW-Managed' },
+  };
+  const vc = verdictCfg[result.triage_level] || verdictCfg.YELLOW;
+  document.getElementById('verdict-panel').className = `rounded-2xl py-6 px-5 text-white text-center shadow-md ${vc.bg}`;
+  document.getElementById('verdict-level').textContent = vc.level;
+  document.getElementById('verdict-action').textContent = vc.action;
+
   try {
     const payload = {
       shift_id: state.shiftId,
-      name, age, sex,
+      name, age, sex, address,
+      bp: bp || null,
+      temperature: temp || null,
+      heart_rate: heart_rate || null,
+      spo2: spo2 || null,
       chief_complaint: complaint,
       image_path: state.capturedImagePath || null,
       image_findings: result.image_findings || null,
       followup_qa,
       triage_level: result.triage_level,
+      triage_reason: result.triage_reason || null,
       top_conditions: result.top_conditions,
-      handoff_summary: JSON.stringify(result.soap_summary),
+      followup_questions: result.followup_questions || [],
+      soap_notes: JSON.stringify(result.soap_summary),
     };
 
     const res = await fetch('/api/patients', {
@@ -285,35 +481,31 @@ async function proceedToSummary() {
     const patient = await res.json();
     state.currentPatientId = patient.id;
     state.patients.push(patient);
+    updatePatientCountBadge();
 
-    document.getElementById('header-patient-count').textContent = `${state.patients.length} pasyente`;
+    document.getElementById('summary-encounter-id').textContent =
+      `Encounter ID: #GEM-${String(patient.id).padStart(4, '0')}`;
+
     showScreen('screen-summary');
   } catch (err) {
-    showError(`Hindi ma-save ang pasyente: ${err.message}`);
+    showError(`Could not save patient: ${err.message}`);
   }
 }
 
 async function generatePDF() {
-  if (!state.currentPatientId) { showError('Walang pasyente na naka-save.'); return; }
+  if (!state.currentPatientId) { showError('No patient saved yet.'); return; }
 
   const btn = document.getElementById('btn-generate-pdf');
-  btn.textContent = '⏳ Ginagawa ang PDF...';
+  btn.textContent = '⏳ Generating PDF...';
   btn.disabled = true;
 
   try {
-    const url = `/api/export/pdf/${state.currentPatientId}`;
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.download = `patient_${state.currentPatientId}_handoff.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showToast('PDF na-generate! Binubuksan...');
+    window.open(`/api/export/pdf/${state.currentPatientId}`, '_blank');
+    showToast('PDF generated! Opening in new tab...');
   } catch (err) {
-    showError(`Hindi ma-generate ang PDF: ${err.message}`);
+    showError(`Could not generate PDF: ${err.message}`);
   } finally {
-    btn.textContent = '📄 I-Generate ang PDF';
+    btn.textContent = '📄 Generate PDF Handoff';
     btn.disabled = false;
   }
 }
@@ -324,10 +516,12 @@ function saveAndNewPatient() {
 }
 
 function clearIntakeForm() {
-  document.getElementById('input-name').value = '';
-  document.getElementById('input-age').value = '';
-  document.getElementById('input-complaint').value = '';
+  ['input-name', 'input-age', 'input-address', 'input-bp-sys', 'input-bp-dia', 'input-temp', 'input-hr', 'input-spo2', 'input-complaint'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   document.querySelectorAll('input[name="sex"]').forEach(el => el.checked = false);
+  updateSexToggle();
   clearPhoto();
   state.capturedImageFile = null;
   state.capturedImagePath = null;
@@ -345,9 +539,20 @@ async function refreshPatientLog() {
     if (!res.ok) throw new Error('Failed to fetch patients');
     state.patients = await res.json();
     renderPatientLog();
-  } catch (err) {
-    showToast('Hindi ma-load ang patient log.');
+  } catch {
+    showToast('Could not load patient log.');
   }
+}
+
+function filterLog(level) {
+  state.logFilter = level;
+  document.querySelectorAll('.log-filter').forEach(btn => {
+    const active = btn.id === `filter-${level}`;
+    btn.className = `log-filter px-4 py-1.5 rounded-full text-sm font-semibold ${
+      active ? 'bg-navy text-white' : 'bg-white text-gray-600 border border-gray-200'
+    }`;
+  });
+  renderPatientLog();
 }
 
 function renderPatientLog() {
@@ -355,51 +560,54 @@ function renderPatientLog() {
   const empty = document.getElementById('log-empty');
   list.innerHTML = '';
 
-  const red = state.patients.filter(p => p.triage_level === 'RED').length;
+  const red    = state.patients.filter(p => p.triage_level === 'RED').length;
   const yellow = state.patients.filter(p => p.triage_level === 'YELLOW').length;
-  const green = state.patients.filter(p => p.triage_level === 'GREEN').length;
+  const green  = state.patients.filter(p => p.triage_level === 'GREEN').length;
 
-  document.getElementById('stat-red').textContent = red;
+  document.getElementById('stat-red').textContent    = red;
   document.getElementById('stat-yellow').textContent = yellow;
-  document.getElementById('stat-green').textContent = green;
-  document.getElementById('header-patient-count').textContent = `${state.patients.length} pasyente`;
+  document.getElementById('stat-green').textContent  = green;
+  updatePatientCountBadge();
 
-  if (state.patients.length === 0) {
+  const filtered = state.logFilter === 'ALL'
+    ? state.patients
+    : state.patients.filter(p => p.triage_level === state.logFilter);
+
+  if (filtered.length === 0) {
     empty.classList.remove('hidden');
     return;
   }
   empty.classList.add('hidden');
 
-  const badgeColors = { RED: 'bg-danger', YELLOW: 'bg-amber', GREEN: 'bg-forest' };
-  const statuses = ['Pending', 'Seen', 'Referred', 'Sent Home'];
+  const dotColors  = { RED: 'bg-danger', YELLOW: 'bg-amber', GREEN: 'bg-forest' };
+  const statuses   = ['Pending', 'Seen', 'Referred', 'Sent Home'];
 
-  state.patients.slice().reverse().forEach(p => {
+  filtered.slice().reverse().forEach(p => {
     let conditions = [];
     try { conditions = JSON.parse(p.top_conditions || '[]'); } catch {}
     const topCond = conditions[0]?.condition || '—';
-
-    const ts = new Date(p.timestamp);
-    const timeStr = ts.toLocaleTimeString('fil-PH', { hour: '2-digit', minute: '2-digit' });
+    const timeStr = new Date(p.timestamp).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
 
     const card = document.createElement('div');
-    card.className = 'bg-white rounded-xl shadow p-4 flex flex-col gap-2';
+    card.className = 'bg-white rounded-xl shadow-sm p-4 flex flex-col gap-2';
     card.innerHTML = `
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-bold text-gray-400">${timeStr}</span>
-          <span class="font-semibold text-sm">${p.name || 'Walang Pangalan'}</span>
-          ${p.age ? `<span class="text-xs text-gray-400">${p.age}${p.sex || ''}</span>` : ''}
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-3 h-3 rounded-full flex-shrink-0 ${dotColors[p.triage_level] || 'bg-amber'}"></div>
+          <span class="font-semibold text-sm truncate">${p.name || 'Anonymous'}</span>
+          ${p.age ? `<span class="text-xs text-gray-400 flex-shrink-0">${p.age}${p.sex || ''}</span>` : ''}
         </div>
-        <span class="text-white text-xs font-bold px-3 py-1 rounded-full ${badgeColors[p.triage_level] || 'bg-amber'}">${p.triage_level}</span>
+        <span class="text-xs text-gray-400 flex-shrink-0">${timeStr}</span>
       </div>
-      <div class="text-sm text-gray-600 line-clamp-1">${p.chief_complaint}</div>
-      <div class="text-xs text-gray-400">Posible: ${topCond}</div>
+      <div class="text-sm text-gray-600 line-clamp-2">${p.chief_complaint}</div>
+      <div class="text-xs text-gray-400">Top: ${topCond}</div>
       <div class="flex items-center gap-2 mt-1">
-        <span class="text-xs text-gray-500">Status:</span>
-        <select onchange="updateStatus(${p.id}, this.value)" class="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-navy">
+        <select onchange="updateStatus(${p.id}, this.value)"
+          class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-navy flex-1">
           ${statuses.map(s => `<option value="${s}" ${p.status === s ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
-        <button onclick="downloadPatientPDF(${p.id})" class="text-xs text-navy underline ml-auto">PDF</button>
+        <button onclick="downloadPatientPDF(${p.id})"
+          class="text-xs text-navy underline px-2">PDF</button>
       </div>`;
     list.appendChild(card);
   });
@@ -415,9 +623,9 @@ async function updateStatus(patientId, status) {
     if (!res.ok) throw new Error('Update failed');
     const idx = state.patients.findIndex(p => p.id === patientId);
     if (idx !== -1) state.patients[idx].status = status;
-    showToast(`Status na-update: ${status}`);
-  } catch (err) {
-    showError('Hindi ma-update ang status.');
+    showToast(`Status updated: ${status}`);
+  } catch {
+    showError('Could not update status.');
   }
 }
 
@@ -432,34 +640,100 @@ function downloadPatientPDF(patientId) {
 
 // ── End Shift ──────────────────────────────────────────────────────────────
 function prepareEndShift() {
-  const red = state.patients.filter(p => p.triage_level === 'RED').length;
+  const red    = state.patients.filter(p => p.triage_level === 'RED').length;
   const yellow = state.patients.filter(p => p.triage_level === 'YELLOW').length;
-  const green = state.patients.filter(p => p.triage_level === 'GREEN').length;
+  const green  = state.patients.filter(p => p.triage_level === 'GREEN').length;
 
-  document.getElementById('endshift-bhw').textContent = state.bhwName || '';
-  document.getElementById('endshift-total').textContent = state.patients.length;
-  document.getElementById('endshift-red').textContent = red;
-  document.getElementById('endshift-yellow').textContent = yellow;
-  document.getElementById('endshift-green').textContent = green;
-  document.getElementById('endshift-email').textContent = state.coordinatorEmail || '';
+  document.getElementById('endshift-bhw').textContent  = state.bhwName || '';
+  document.getElementById('endshift-date').textContent = new Date().toLocaleDateString('en-PH', { dateStyle: 'long' });
+
+  renderDonutChart(red, yellow, green);
 
   if (state.shiftId) {
     document.getElementById('btn-download-excel').href = `/api/export/excel/${state.shiftId}`;
   }
+
+  // Top conditions (color-coded)
+  const condCounts = {};
+  state.patients.forEach(p => {
+    try {
+      const conds = JSON.parse(p.top_conditions || '[]');
+      if (conds[0]?.condition) {
+        condCounts[conds[0].condition] = (condCounts[conds[0].condition] || 0) + 1;
+      }
+    } catch {}
+  });
+  const topConds = Object.entries(condCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const tcCard = document.getElementById('top-conditions-card');
+  const tcList = document.getElementById('endshift-top-conditions');
+  const rankColors = ['text-danger bg-danger/10', 'text-amber bg-amber/10', 'text-navy bg-navy/10'];
+  if (topConds.length > 0) {
+    tcCard.classList.remove('hidden');
+    tcList.innerHTML = topConds.map(([name, count], i) => `
+      <div class="flex items-center justify-between py-2.5 last:pb-0">
+        <div class="flex items-center gap-2.5">
+          <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${rankColors[i]}">${i + 1}</span>
+          <span class="text-sm font-semibold text-gray-700">${name}</span>
+        </div>
+        <span class="text-xs font-semibold text-gray-500 ml-2 flex-shrink-0">${count} case${count !== 1 ? 's' : ''}</span>
+      </div>`).join('');
+  }
+}
+
+function renderDonutChart(red, yellow, green) {
+  const total = red + yellow + green;
+  const C = 2 * Math.PI * 52; // circumference for r=52
+
+  document.getElementById('donut-total').textContent       = total;
+  document.getElementById('donut-red-count').textContent   = red;
+  document.getElementById('donut-yellow-count').textContent = yellow;
+  document.getElementById('donut-green-count').textContent  = green;
+
+  const gSeg = document.getElementById('donut-seg-green');
+  const ySeg = document.getElementById('donut-seg-yellow');
+  const rSeg = document.getElementById('donut-seg-red');
+
+  if (total === 0) {
+    [gSeg, ySeg, rSeg].forEach(s => { s.setAttribute('stroke-dasharray', `0 ${C}`); s.setAttribute('stroke-dashoffset', '0'); });
+    return;
+  }
+
+  const gLen = (green  / total) * C;
+  const yLen = (yellow / total) * C;
+  const rLen = (red    / total) * C;
+
+  // Positive dashoffset shifts the dash start forward along the clockwise path
+  gSeg.setAttribute('stroke-dasharray', `${gLen} ${C}`);
+  gSeg.setAttribute('stroke-dashoffset', '0');
+
+  ySeg.setAttribute('stroke-dasharray', `${yLen} ${C}`);
+  ySeg.setAttribute('stroke-dashoffset', String(C - gLen));
+
+  rSeg.setAttribute('stroke-dasharray', `${rLen} ${C}`);
+  rSeg.setAttribute('stroke-dashoffset', String(C - gLen - yLen));
 }
 
 async function sendShiftEmail() {
-  if (!state.shiftId) return;
+  const emailInput = document.getElementById('input-coordinator-email');
+  const email = emailInput.value.trim();
+
+  if (!email || !email.includes('@')) {
+    showError('Please enter a valid coordinator email address.');
+    emailInput.focus();
+    return;
+  }
+
+  state.coordinatorEmail = email;
 
   const btn = document.getElementById('btn-send-email');
-  btn.textContent = '⏳ Nagpapadala...';
+  btn.textContent = '⏳ Sending...';
   btn.disabled = true;
 
   try {
     const res = await fetch('/api/email/shift-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shift_id: state.shiftId }),
+      body: JSON.stringify({ shift_id: state.shiftId, coordinator_email: email }),
     });
 
     if (!res.ok) {
@@ -467,17 +741,17 @@ async function sendShiftEmail() {
       throw new Error(err.detail || 'Email send failed');
     }
 
-    showToast('Email naipadala na sa coordinator!', 4000);
-    btn.textContent = '✅ Naipadala na!';
+    showToast('Report sent to coordinator!', 4000);
+    btn.textContent = '✅ Sent!';
   } catch (err) {
-    showError(`Hindi ma-send ang email: ${err.message}`);
-    btn.textContent = '📧 Ipadala ang Report sa Email';
+    showError(`Could not send email: ${err.message}`);
+    btn.textContent = '📧 Send Report via Email';
     btn.disabled = false;
   }
 }
 
 async function confirmEndShift() {
-  if (!confirm('Sigurado ka bang tapusin ang shift?')) return;
+  if (!confirm('End this shift? This will close the patient log.')) return;
 
   try {
     const res = await fetch(`/api/shifts/end?shift_id=${state.shiftId}`, { method: 'POST' });
@@ -492,13 +766,22 @@ async function confirmEndShift() {
     document.getElementById('bottom-nav').classList.add('hidden');
     document.getElementById('shift-info-header').classList.add('hidden');
     document.getElementById('input-bhw-name').value = '';
-    document.getElementById('input-coordinator-email').value = '';
 
-    showToast('Shift natapos na. Salamat!', 3000);
+    showToast('Shift closed. Thank you!', 3000);
     setTimeout(() => showScreen('screen-home'), 500);
   } catch (err) {
-    showError(`Hindi ma-tapusin ang shift: ${err.message}`);
+    showError(`Could not close shift: ${err.message}`);
   }
+}
+
+// ── Sex Toggle ─────────────────────────────────────────────────────────────
+function updateSexToggle() {
+  const checked = document.querySelector('input[name="sex"]:checked')?.value;
+  const mLabel = document.getElementById('sex-label-m');
+  const fLabel = document.getElementById('sex-label-f');
+  const baseClass = 'flex-1 flex items-center justify-center cursor-pointer transition-colors text-sm font-semibold';
+  if (mLabel) mLabel.className = `${baseClass} ${checked === 'M' ? 'bg-navy text-white' : 'text-gray-600'}`;
+  if (fLabel) fLabel.className = `${baseClass} ${checked === 'F' ? 'bg-navy text-white' : 'text-gray-600'}`;
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────

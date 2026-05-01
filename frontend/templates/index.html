@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fil">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -8,417 +8,596 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>GEMMA — Triage Assistant</title>
   <link rel="manifest" href="/manifest.json" />
-  <link rel="icon" href="/static/icons/icon-192.png" />
+  <link rel="icon" href="/static/icons/Gemma_Logo.png" />
   <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            navy:   '#1B3A6B',
-            forest: '#2D6A2D',
-            gold:   '#F5C518',
-            danger: '#C0392B',
-            amber:  '#E67E22',
-            light:  '#F0F4F8',
+    /* Set config BEFORE CDN loads — must use window.tailwind, not tailwind.config */
+    window.tailwind = {
+      config: {
+        theme: {
+          extend: {
+            colors: {
+              navy:   '#1B3A6B',
+              forest: '#2D6A2D',
+              gold:   '#F5C518',
+              danger: '#C0392B',
+              amber:  '#E67E22',
+              light:  '#F0F4F8',
+            },
+            fontFamily: {
+              sans:    ['Inter', 'ui-sans-serif', 'system-ui'],
+              display: ['Public Sans', 'Inter', 'ui-sans-serif'],
+            },
           }
         }
       }
     }
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-light min-h-screen font-sans">
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- APP HEADER (visible on all screens except home)               -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
+  <style>
+    html { background: #c8cdd4; min-height: 100vh; }
+    body {
+      max-width: 390px !important;
+      margin: 0 auto !important;
+      padding-bottom: 72px;
+      background: #F0F4F8;
+      min-height: 100vh;
+      box-shadow: 0 0 60px rgba(0,0,0,0.25);
+    }
+    .screen-active { display: flex !important; }
+    [data-screen] { display: none; flex-direction: column; }
+    .triage-badge { min-height: 88px; }
+    input, textarea, select { font-size: 16px; }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    /* Pin fixed elements to the centered body column */
+    #bottom-nav {
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      width: 390px !important;
+      max-width: 100vw !important;
+    }
+  </style>
+</head>
+<body class="font-sans text-gray-800">
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- APP HEADER (shown on all screens except home)                   -->
+<!-- ════════════════════════════════════════════════════════════════ -->
 <header id="app-header" class="hidden bg-navy text-white px-4 py-3 flex items-center justify-between shadow-md sticky top-0 z-50">
   <div class="flex items-center gap-3">
-    <button id="btn-back" onclick="goBack()" class="text-white text-2xl leading-none p-1">&#8592;</button>
+    <button id="btn-back" onclick="goBack()" class="text-white text-2xl p-1 leading-none">←</button>
     <div>
-      <div class="font-bold text-lg leading-tight">GEMMA</div>
+      <div class="font-display font-bold text-lg leading-tight">GEMMA</div>
       <div id="header-subtitle" class="text-xs text-blue-200">Triage Assistant</div>
     </div>
   </div>
-  <div id="shift-info-header" class="text-right text-xs text-blue-200 hidden">
+  <div id="shift-info-header" class="hidden text-right text-xs text-blue-200">
     <div id="header-bhw-name"></div>
-    <div id="header-patient-count" class="font-bold text-white"></div>
+    <div id="header-patient-count" class="font-bold text-white text-sm"></div>
   </div>
 </header>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- SCREEN 1: HOME — Shift Start                                   -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div id="screen-home" data-screen class="screen-active min-h-screen flex flex-col">
-  <div class="bg-navy text-white px-6 pt-10 pb-8 text-center">
-    <div class="text-4xl mb-2">🏥</div>
-    <h1 class="text-3xl font-bold">GEMMA</h1>
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 1: HOME — Shift Start                                    -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="screen-home" data-screen class="screen-active min-h-screen flex-col">
+
+  <!-- Hero header -->
+  <div class="bg-navy text-white px-6 pt-12 pb-10 text-center flex flex-col items-center">
+    <img src="/static/icons/Gemma_Logo.png" class="w-20 h-20 rounded-2xl mb-4 shadow-lg mx-auto" alt="GEMMA" />
+    <h1 class="font-display font-black text-4xl tracking-tight">GEMMA</h1>
     <p class="text-blue-200 text-sm mt-1">Guided Emergency & Medical Management Assistant</p>
-    <p class="text-blue-300 text-xs mt-1">Barangay Platero Health Center, City of Biñan</p>
+    <p class="text-blue-300 text-xs mt-1">Barangay Platero Health Center · City of Biñan</p>
   </div>
 
+  <!-- Form card -->
   <div class="flex-1 px-5 py-6 flex flex-col gap-5">
-    <div class="bg-white rounded-2xl shadow p-5">
-      <h2 class="text-navy font-bold text-lg mb-4">Simulan ang Shift</h2>
-
-      <div class="mb-4">
-        <label class="block text-sm font-semibold text-gray-600 mb-1">Pangalan ng BHW</label>
-        <input id="input-bhw-name"
-          type="text" placeholder="Ilagay ang inyong pangalan..."
-          class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-lg focus:border-navy focus:outline-none" />
-      </div>
+    <div class="bg-white rounded-2xl shadow-md p-5">
+      <h2 class="font-display font-bold text-navy text-xl mb-5">Start Duty</h2>
 
       <div class="mb-5">
-        <label class="block text-sm font-semibold text-gray-600 mb-1">Email ng Coordinator</label>
-        <input id="input-coordinator-email"
-          type="email" placeholder="coordinator@health.gov.ph"
-          class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-lg focus:border-navy focus:outline-none" />
+        <label class="block text-sm font-semibold text-gray-600 mb-1.5">Barangay Health Worker</label>
+        <input id="input-bhw-name" type="text" placeholder="e.g. Maria Santos"
+          class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-base focus:border-navy focus:outline-none transition-colors" />
       </div>
 
       <button onclick="startShift()"
-        class="w-full bg-navy text-white font-bold text-xl py-4 rounded-2xl active:scale-95 transition-transform shadow-lg">
-        ▶ Simulan ang Shift
+        class="w-full bg-navy text-white font-display font-bold text-lg py-4 rounded-2xl active:scale-95 transition-transform shadow-md flex items-center justify-center gap-2">
+        ▶ START SHIFT
       </button>
     </div>
 
-    <div class="text-center text-xs text-gray-400 px-4">
-      Hindi kapalit ng doktor o BHW — gabay lamang para sa mas mabilis na serbisyo.
-    </div>
+    <p class="text-center text-xs text-gray-400 px-4">
+      Not a replacement for a doctor — for faster community-level triage guidance only.
+    </p>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- SCREEN 2: INTAKE — New Patient                                 -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div id="screen-intake" data-screen class="hidden min-h-screen flex flex-col">
-  <div class="px-5 py-5 flex flex-col gap-4 flex-1">
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 2: INTAKE — New Patient                                  -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="screen-intake" data-screen class="hidden flex-col">
+  <div class="px-4 pt-4 pb-2 flex flex-col gap-4">
 
-    <div class="bg-white rounded-2xl shadow p-5">
-      <h2 class="text-navy font-bold text-lg mb-4">Bagong Pasyente</h2>
+    <!-- Patient Info -->
+    <div class="bg-white rounded-2xl shadow-sm p-5">
+      <h2 class="font-display font-bold text-navy text-base mb-4 flex items-center gap-2">
+        👤 Patient Information
+      </h2>
 
       <div class="grid grid-cols-2 gap-3 mb-3">
-        <div>
-          <label class="block text-xs font-semibold text-gray-500 mb-1">Pangalan <span class="text-gray-400">(opsyonal)</span></label>
+        <div class="col-span-2">
+          <label class="block text-xs font-semibold text-gray-500 mb-1">Name <span class="text-gray-400 font-normal">(optional)</span></label>
           <input id="input-name" type="text" placeholder="Juan dela Cruz"
-            class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-base focus:border-navy focus:outline-none" />
+            class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-base focus:border-navy focus:outline-none" />
         </div>
         <div>
-          <label class="block text-xs font-semibold text-gray-500 mb-1">Edad</label>
+          <label class="block text-xs font-semibold text-gray-500 mb-1">Age</label>
           <input id="input-age" type="number" placeholder="25" min="0" max="120"
-            class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-base focus:border-navy focus:outline-none" />
+            class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-base focus:border-navy focus:outline-none" />
         </div>
-      </div>
-
-      <div class="mb-4">
-        <label class="block text-xs font-semibold text-gray-500 mb-1">Kasarian</label>
-        <div class="flex gap-3">
-          <label class="flex-1 flex items-center justify-center gap-2 border-2 border-gray-200 rounded-xl py-2 cursor-pointer has-[:checked]:border-navy has-[:checked]:bg-blue-50">
-            <input type="radio" name="sex" value="M" class="accent-navy" /> <span class="font-semibold">Lalaki</span>
-          </label>
-          <label class="flex-1 flex items-center justify-center gap-2 border-2 border-gray-200 rounded-xl py-2 cursor-pointer has-[:checked]:border-navy has-[:checked]:bg-blue-50">
-            <input type="radio" name="sex" value="F" class="accent-navy" /> <span class="font-semibold">Babae</span>
-          </label>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1">Sex</label>
+          <div class="flex border-2 border-gray-200 rounded-xl overflow-hidden h-[46px]">
+            <label id="sex-label-m" class="flex-1 flex items-center justify-center cursor-pointer transition-colors text-sm font-semibold text-gray-600">
+              <input type="radio" name="sex" value="M" class="sr-only" onchange="updateSexToggle()" /> Male
+            </label>
+            <div class="w-px bg-gray-200"></div>
+            <label id="sex-label-f" class="flex-1 flex items-center justify-center cursor-pointer transition-colors text-sm font-semibold text-gray-600">
+              <input type="radio" name="sex" value="F" class="sr-only" onchange="updateSexToggle()" /> Female
+            </label>
+          </div>
         </div>
-      </div>
-
-      <div class="mb-4">
-        <label class="block text-sm font-semibold text-gray-600 mb-1">Chief Complaint <span class="text-red-500">*</span></label>
-        <textarea id="input-complaint"
-          placeholder="Ilarawan ang sintomas ng pasyente... (hal: Masakit ang ulo, may lagnat, at nagsusuka mula kahapon.)"
-          rows="4"
-          class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-base focus:border-navy focus:outline-none resize-none"></textarea>
+        <div class="col-span-2">
+          <label class="block text-xs font-semibold text-gray-500 mb-1">Address <span class="text-gray-400 font-normal">(optional)</span></label>
+          <input id="input-address" type="text" placeholder="Barangay, City"
+            class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-base focus:border-navy focus:outline-none" />
+        </div>
       </div>
     </div>
 
-    <div class="bg-white rounded-2xl shadow p-5">
-      <h3 class="text-navy font-bold mb-3">Larawan ng Kondisyon</h3>
-      <p class="text-gray-500 text-sm mb-3">Opsyonal — para sa nakikitang sugat, pantal, pamamaga, atbp.</p>
+    <!-- Vital Signs -->
+    <div class="bg-white rounded-2xl shadow-sm p-5">
+      <h2 class="font-display font-bold text-navy text-base mb-3 flex items-center gap-2">
+        ❤️ Vital Signs
+      </h2>
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1">Blood Pressure <span class="text-gray-400 font-normal">(mmHg)</span></label>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="relative">
+              <input id="input-bp-sys" type="number" placeholder="Systolic (120)" min="0" max="300"
+                class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-base focus:border-navy focus:outline-none" />
+            </div>
+            <div class="relative">
+              <input id="input-bp-dia" type="number" placeholder="Diastolic (80)" min="0" max="200"
+                class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-base focus:border-navy focus:outline-none" />
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">Temperature</label>
+            <div class="relative">
+              <input id="input-temp" type="text" placeholder="37.0"
+                class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-base focus:border-navy focus:outline-none pr-8" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">°C</span>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">Heart Rate</label>
+            <div class="relative">
+              <input id="input-hr" type="text" placeholder="80"
+                class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-base focus:border-navy focus:outline-none pr-12" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">bpm</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1">SpO2 (Oxygen Saturation)</label>
+          <div class="relative">
+            <input id="input-spo2" type="text" placeholder="98"
+              class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-base focus:border-navy focus:outline-none pr-8" />
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chief Complaint -->
+    <div class="bg-white rounded-2xl shadow-sm p-5">
+      <h2 class="font-display font-bold text-navy text-base mb-1 flex items-center gap-2">
+        🩺 Chief Complaint <span class="text-danger text-sm">*</span>
+      </h2>
+      <p class="text-gray-400 text-xs mb-3">Required. Describe the patient's main symptom.</p>
+      <textarea id="input-complaint" rows="5"
+        placeholder="• Sakit ng ulo&#10;• May lagnat&#10;• Nanghihina"
+        class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-base focus:border-navy focus:outline-none resize-none font-mono leading-relaxed"></textarea>
+      <p class="text-gray-400 text-xs mt-1.5">Each line = one symptom. Press Enter to add another bullet.</p>
+    </div>
+
+    <!-- Photo capture -->
+    <div class="bg-white rounded-2xl shadow-sm p-5">
+      <h2 class="font-display font-bold text-navy text-base mb-1 flex items-center gap-2">
+        📷 Photo <span class="text-gray-400 font-normal text-xs ml-1">(optional)</span>
+      </h2>
+      <p class="text-gray-400 text-xs mb-3">For visible conditions — wound, rash, swelling, etc.</p>
 
       <div id="camera-preview-container" class="hidden mb-3">
         <img id="camera-preview" src="" alt="Captured image" class="w-full rounded-xl object-cover max-h-48" />
-        <button onclick="clearPhoto()" class="mt-2 text-sm text-red-500 underline">✕ Alisin ang larawan</button>
+        <button onclick="clearPhoto()" class="mt-2 text-sm text-danger underline">✕ Remove photo</button>
       </div>
 
       <div class="flex gap-3">
         <button onclick="openCamera()"
-          class="flex-1 bg-forest text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform">
-          📷 Kumuha ng Larawan
+          class="w-full bg-navy text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform text-sm">
+          📷 Take Photo
         </button>
-        <label class="flex-1 bg-gray-100 text-gray-700 font-bold py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer active:scale-95">
-          📁 Pumili ng File
-          <input id="file-input" type="file" accept="image/*" class="hidden" onchange="handleFileSelect(event)" />
-        </label>
       </div>
     </div>
 
-    <button onclick="submitTriage()"
-      id="btn-triage-submit"
-      class="w-full bg-navy text-white font-bold text-xl py-4 rounded-2xl active:scale-95 transition-transform shadow-lg">
-      🔍 I-Triage ang Pasyente
+    <!-- Submit -->
+    <button onclick="submitTriage()" id="btn-triage-submit"
+      class="w-full bg-forest text-white font-display font-bold text-xl py-4 rounded-2xl active:scale-95 transition-transform shadow-md flex items-center justify-center gap-2">
+      🔍 ASSESS WITH GEMMA
     </button>
 
-    <button onclick="showScreen('screen-log')"
-      class="w-full bg-white border-2 border-navy text-navy font-bold py-3 rounded-2xl">
-      📋 Tingnan ang Patient Log
-    </button>
   </div>
-
   <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleCameraCapture(event)" />
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- LOADING SCREEN                                                 -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div id="screen-loading" data-screen class="hidden min-h-screen flex flex-col items-center justify-center bg-light">
-  <div class="text-center px-8">
-    <div class="text-6xl mb-6 animate-pulse">🏥</div>
-    <div class="text-navy font-bold text-xl mb-2">Sinusuri ang pasyente...</div>
-    <div class="text-gray-500 text-sm mb-6" id="loading-message">Hinihintay ang sagot ng GEMMA AI...</div>
-    <div class="flex justify-center gap-1">
-      <div class="w-3 h-3 bg-navy rounded-full animate-bounce" style="animation-delay:0ms"></div>
-      <div class="w-3 h-3 bg-navy rounded-full animate-bounce" style="animation-delay:150ms"></div>
-      <div class="w-3 h-3 bg-navy rounded-full animate-bounce" style="animation-delay:300ms"></div>
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- LOADING SCREEN                                                  -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="screen-loading" data-screen class="hidden min-h-screen flex-col items-center justify-center bg-light">
+  <div class="text-center px-8 w-full max-w-xs">
+    <img src="/static/icons/Gemma_Logo.png" class="w-20 h-20 rounded-2xl animate-pulse mb-6 shadow-lg mx-auto block" alt="GEMMA" />
+    <div class="font-display font-bold text-navy text-xl mb-1">GEMMA is thinking...</div>
+    <div class="text-gray-400 text-xs mb-5" id="loading-timer">0s elapsed</div>
+
+    <!-- Progress bar -->
+    <div class="w-full bg-gray-200 rounded-full h-1.5 mb-5">
+      <div id="loading-bar" class="bg-navy h-1.5 rounded-full transition-all duration-1000" style="width:5%"></div>
     </div>
+
+    <div class="text-gray-600 text-sm mb-6 min-h-[40px]" id="loading-message">Reading chief complaint...</div>
+
+    <div class="flex justify-center gap-2">
+      <div class="w-2.5 h-2.5 bg-navy rounded-full animate-bounce" style="animation-delay:0ms"></div>
+      <div class="w-2.5 h-2.5 bg-navy rounded-full animate-bounce" style="animation-delay:150ms"></div>
+      <div class="w-2.5 h-2.5 bg-navy rounded-full animate-bounce" style="animation-delay:300ms"></div>
+    </div>
+
+    <p class="text-gray-400 text-xs mt-8">Local AI model — usually 20–40 seconds</p>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- SCREEN 3: RESULT — Triage Output                               -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div id="screen-result" data-screen class="hidden flex flex-col">
-  <div class="px-5 py-5 flex flex-col gap-4">
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 3: RESULT — Triage Output                                -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="screen-result" data-screen class="hidden flex-col">
+  <div class="px-4 py-5 flex flex-col gap-4">
 
-    <!-- Triage badge -->
-    <div id="triage-badge-container" class="rounded-2xl shadow p-5 text-center text-white">
-      <div class="text-sm font-semibold opacity-80 mb-1">Triage Level</div>
-      <div id="triage-level-text" class="text-5xl font-black tracking-wide">—</div>
-      <div id="triage-reason-text" class="text-sm mt-2 opacity-90"></div>
+    <!-- Preliminary notice — verdict revealed only after follow-up questions -->
+    <div class="bg-yellow-50 rounded-2xl shadow-sm px-5 py-4 border-l-4 border-yellow-400 flex items-start gap-4">
+      <span class="text-3xl leading-none mt-0.5">🔍</span>
+      <div>
+        <div class="font-display font-bold text-yellow-800 text-base leading-tight">Preliminary Assessment</div>
+        <div class="text-xs text-yellow-700 mt-1 leading-snug">
+          Answer the follow-up questions below, then tap <strong>Submit Answers</strong> to confirm the triage level.
+        </div>
+      </div>
+    </div>
+
+    <!-- Chief Complaint (bullet display) -->
+    <div class="bg-white rounded-2xl shadow-sm px-4 py-3">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Chief Complaint</p>
+      <div id="result-complaint-list" class="flex flex-col gap-1 text-sm text-gray-800"></div>
     </div>
 
     <!-- Top 5 conditions -->
-    <div class="bg-white rounded-2xl shadow p-5">
-      <h3 class="text-navy font-bold text-base mb-3">Top 5 Posibleng Kondisyon</h3>
+    <div class="bg-white rounded-2xl shadow-sm p-5">
+      <h3 class="font-display font-bold text-navy text-base mb-3">Top 5 Possible Conditions</h3>
       <div id="conditions-list" class="flex flex-col gap-2"></div>
-      <div class="mt-3 bg-yellow-50 border border-gold rounded-xl p-3 text-xs text-yellow-800">
-        ⚠️ <strong>Disclaimer:</strong> Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor.
+      <div class="mt-4 bg-amber/10 border border-amber/40 rounded-xl p-3 text-xs text-amber-800">
+        ⚠️ <em>Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor.</em>
       </div>
     </div>
 
     <!-- Follow-up questions -->
-    <div class="bg-white rounded-2xl shadow p-5">
-      <h3 class="text-navy font-bold text-base mb-3">Mga Follow-Up na Tanong</h3>
-      <p class="text-gray-500 text-xs mb-3">Itanong sa pasyente at isulat ang sagot:</p>
-      <div id="followup-questions-list" class="flex flex-col gap-3"></div>
+    <div class="bg-white rounded-2xl shadow-sm p-5">
+      <h3 class="font-display font-bold text-navy text-base mb-1">Follow-Up Questions</h3>
+      <p class="text-gray-400 text-xs mb-3">Ask the patient and record their answers.</p>
+      <div id="followup-questions-list" class="flex flex-col gap-4"></div>
     </div>
 
-    <!-- Action buttons -->
+    <!-- Actions -->
     <div class="flex flex-col gap-3">
       <button onclick="refineWithFollowup()"
-        class="w-full bg-navy text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
-        🔄 I-Refine ang Assessment
+        class="w-full bg-navy text-white font-semibold py-4 rounded-2xl text-base active:scale-95 transition-transform">
+        🔄 Submit Answers & Save
       </button>
       <button onclick="proceedToSummary()"
-        class="w-full bg-forest text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
-        ✅ Tanggapin at I-Save
+        class="w-full bg-forest text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform">
+        ✅ Skip & Save Patient
       </button>
     </div>
+
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- SCREEN 4: SUMMARY — SOAP + PDF                                 -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div id="screen-summary" data-screen class="hidden flex flex-col">
-  <div class="px-5 py-5 flex flex-col gap-4">
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 4: SUMMARY — SOAP + PDF                                  -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="screen-summary" data-screen class="hidden flex-col">
+  <div class="px-4 pt-5 pb-4 flex flex-col gap-4">
 
-    <div class="bg-white rounded-2xl shadow p-5">
-      <h3 class="text-navy font-bold text-base mb-1">Doctor Handoff Summary</h3>
-      <p class="text-gray-400 text-xs mb-4">SOAP-lite note para ibigay sa doktor</p>
+    <!-- Title + encounter ID -->
+    <div>
+      <h2 class="font-display font-black text-2xl text-gray-900 leading-tight">Patient Summary</h2>
+      <div id="summary-encounter-id" class="text-gray-400 text-sm mt-0.5"></div>
+    </div>
 
-      <div class="flex flex-col gap-3">
-        <div class="soap-section">
-          <div class="text-xs font-bold text-navy uppercase mb-1">S — Subjective</div>
-          <div id="soap-s" class="text-sm text-gray-700 bg-light rounded-xl px-3 py-2"></div>
+    <!-- Patient chips: age · sex · triage level -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <span id="chip-age"    class="hidden bg-gray-100 text-gray-700 text-sm font-semibold px-3 py-1.5 rounded-full"></span>
+      <span id="chip-sex"    class="hidden bg-gray-100 text-gray-700 text-sm font-semibold px-3 py-1.5 rounded-full"></span>
+      <span id="chip-triage" class="text-white text-sm font-bold px-4 py-1.5 rounded-full flex items-center gap-1.5"></span>
+    </div>
+
+    <!-- Triage verdict panel — full-width color band -->
+    <div id="verdict-panel" class="rounded-2xl py-6 px-5 text-white text-center shadow-md">
+      <div id="verdict-level" class="font-display font-black text-3xl tracking-wide leading-tight"></div>
+      <div id="verdict-action" class="text-sm font-semibold mt-1.5 opacity-90 uppercase tracking-wide"></div>
+    </div>
+
+    <!-- SOAP note — card design matching reference -->
+    <div class="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+
+      <div class="p-4">
+        <div class="flex items-center gap-3 mb-2.5">
+          <div class="w-8 h-8 bg-navy rounded-lg flex items-center justify-center flex-shrink-0">
+            <span class="font-display font-black text-white text-sm leading-none">S</span>
+          </div>
+          <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Subjective</span>
         </div>
-        <div class="soap-section">
-          <div class="text-xs font-bold text-navy uppercase mb-1">O — Objective</div>
-          <div id="soap-o" class="text-sm text-gray-700 bg-light rounded-xl px-3 py-2"></div>
-        </div>
-        <div class="soap-section">
-          <div class="text-xs font-bold text-navy uppercase mb-1">A — Assessment</div>
-          <div id="soap-a" class="text-sm text-gray-700 bg-light rounded-xl px-3 py-2"></div>
-        </div>
-        <div class="soap-section">
-          <div class="text-xs font-bold text-navy uppercase mb-1">P — Plan</div>
-          <div id="soap-p" class="text-sm text-gray-700 bg-light rounded-xl px-3 py-2"></div>
-        </div>
+        <div id="soap-s" class="text-sm text-gray-700 leading-relaxed"></div>
       </div>
+
+      <div class="p-4">
+        <div class="flex items-center gap-3 mb-2.5">
+          <div class="w-8 h-8 bg-navy rounded-lg flex items-center justify-center flex-shrink-0">
+            <span class="font-display font-black text-white text-sm leading-none">O</span>
+          </div>
+          <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Objective</span>
+        </div>
+        <div id="soap-o" class="text-sm text-gray-700 leading-relaxed"></div>
+      </div>
+
+      <div class="p-4">
+        <div class="flex items-center gap-3 mb-2.5">
+          <div class="w-8 h-8 bg-navy rounded-lg flex items-center justify-center flex-shrink-0">
+            <span class="font-display font-black text-white text-sm leading-none">A</span>
+          </div>
+          <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Assessment</span>
+        </div>
+        <div id="soap-a" class="text-sm text-gray-700 leading-relaxed italic"></div>
+      </div>
+
+      <div class="p-4">
+        <div class="flex items-center gap-3 mb-2.5">
+          <div class="w-8 h-8 bg-navy rounded-lg flex items-center justify-center flex-shrink-0">
+            <span class="font-display font-black text-white text-sm leading-none">P</span>
+          </div>
+          <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Plan</span>
+        </div>
+        <div id="soap-p" class="text-sm text-gray-700 leading-relaxed"></div>
+      </div>
+
     </div>
 
-    <div id="image-findings-card" class="bg-white rounded-2xl shadow p-5 hidden">
-      <h3 class="text-navy font-bold text-base mb-2">Nakita sa Larawan</h3>
-      <p id="image-findings-text" class="text-sm text-gray-700"></p>
+    <!-- Image findings (conditional) -->
+    <div id="image-findings-card" class="hidden bg-white rounded-2xl shadow-sm p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Image Findings (MedGemma)</span>
+      </div>
+      <p id="image-findings-text" class="text-sm text-gray-700 leading-relaxed"></p>
     </div>
 
+    <!-- Disclaimer -->
+    <div class="bg-yellow-50 border border-yellow-300 rounded-2xl p-4 flex items-start gap-3">
+      <span class="text-yellow-500 text-base flex-shrink-0 mt-0.5">⚠</span>
+      <p class="text-xs text-yellow-800 italic leading-relaxed">This is not an official medical record. Used only for quick handoff summary between frontline health workers.</p>
+    </div>
+
+    <!-- Actions -->
     <div class="flex flex-col gap-3">
-      <button onclick="generatePDF()"
-        id="btn-generate-pdf"
-        class="w-full bg-amber text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
-        📄 I-Generate ang PDF
+      <button onclick="generatePDF()" id="btn-generate-pdf"
+        class="w-full bg-navy text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform flex items-center justify-center gap-2">
+        ↓ Generate PDF Handoff
       </button>
       <button onclick="saveAndNewPatient()"
-        class="w-full bg-navy text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
-        ➕ Susunod na Pasyente
+        class="w-full bg-forest text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform">
+        ➕ Next Patient
       </button>
-      <button onclick="showScreen('screen-log')"
-        class="w-full bg-white border-2 border-navy text-navy font-bold py-3 rounded-2xl">
-        📋 Patient Log
+      <button onclick="showScreen('screen-log'); refreshPatientLog();"
+        class="w-full bg-white border-2 border-navy text-navy font-semibold py-3 rounded-2xl text-sm">
+        📋 View Patient Log
       </button>
     </div>
 
-    <div class="bg-yellow-50 border border-gold rounded-xl p-3 text-xs text-yellow-800 text-center">
-      ⚠️ Hindi kapalit ng doktor ang GEMMA — gabay lamang.
-    </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- SCREEN 5: LOG — Patient Table                                  -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div id="screen-log" data-screen class="hidden flex flex-col">
-  <div class="px-4 py-4 flex flex-col gap-3">
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 5: LOG — Patient Table                                   -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="screen-log" data-screen class="hidden flex-col">
+  <div class="px-4 py-5 flex flex-col gap-4">
 
-    <div class="flex items-center justify-between">
-      <h2 class="text-navy font-bold text-lg">Patient Log</h2>
-      <button onclick="refreshPatientLog()" class="text-navy text-sm underline">⟳ I-refresh</button>
-    </div>
-
-    <div id="log-stats" class="grid grid-cols-3 gap-2">
+    <!-- Stats row -->
+    <div class="grid grid-cols-3 gap-2">
       <div class="bg-danger text-white rounded-xl p-3 text-center">
-        <div id="stat-red" class="text-2xl font-black">0</div>
-        <div class="text-xs">RED</div>
+        <div id="stat-red" class="font-display font-black text-2xl">0</div>
+        <div class="text-xs font-semibold mt-0.5">RED</div>
       </div>
       <div class="bg-amber text-white rounded-xl p-3 text-center">
-        <div id="stat-yellow" class="text-2xl font-black">0</div>
-        <div class="text-xs">YELLOW</div>
+        <div id="stat-yellow" class="font-display font-black text-2xl">0</div>
+        <div class="text-xs font-semibold mt-0.5">YELLOW</div>
       </div>
       <div class="bg-forest text-white rounded-xl p-3 text-center">
-        <div id="stat-green" class="text-2xl font-black">0</div>
-        <div class="text-xs">GREEN</div>
+        <div id="stat-green" class="font-display font-black text-2xl">0</div>
+        <div class="text-xs font-semibold mt-0.5">GREEN</div>
       </div>
     </div>
 
+    <!-- Filter pills -->
+    <div class="flex gap-2">
+      <button onclick="filterLog('ALL')" id="filter-ALL"
+        class="log-filter px-4 py-1.5 rounded-full text-sm font-semibold bg-navy text-white">All</button>
+      <button onclick="filterLog('RED')" id="filter-RED"
+        class="log-filter px-4 py-1.5 rounded-full text-sm font-semibold bg-white text-gray-600 border border-gray-200">RED</button>
+      <button onclick="filterLog('YELLOW')" id="filter-YELLOW"
+        class="log-filter px-4 py-1.5 rounded-full text-sm font-semibold bg-white text-gray-600 border border-gray-200">YELLOW</button>
+      <button onclick="filterLog('GREEN')" id="filter-GREEN"
+        class="log-filter px-4 py-1.5 rounded-full text-sm font-semibold bg-white text-gray-600 border border-gray-200">GREEN</button>
+    </div>
+
+    <!-- Patient list -->
     <div id="patient-log-list" class="flex flex-col gap-2"></div>
 
     <div id="log-empty" class="hidden text-center py-10 text-gray-400">
       <div class="text-4xl mb-2">📋</div>
-      <div>Walang pasyente pa sa shift na ito.</div>
+      <div class="text-sm">No patients yet this shift.</div>
     </div>
 
-    <div class="flex flex-col gap-3 mt-2">
-      <button onclick="showScreen('screen-intake')"
-        class="w-full bg-navy text-white font-bold py-4 rounded-2xl text-lg">
-        ➕ Bagong Pasyente
-      </button>
-      <button onclick="showScreen('screen-endshift')"
-        class="w-full bg-danger text-white font-bold py-4 rounded-2xl text-lg">
-        🔴 Tapusin ang Shift
-      </button>
-    </div>
+    <button onclick="showScreen('screen-endshift'); prepareEndShift();"
+      class="w-full bg-danger text-white font-display font-bold py-4 rounded-2xl text-base">
+      🔴 End Shift
+    </button>
+
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- SCREEN 6: END SHIFT                                            -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div id="screen-endshift" data-screen class="hidden flex flex-col">
-  <div class="px-5 py-5 flex flex-col gap-4">
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 6: END SHIFT                                             -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="screen-endshift" data-screen class="hidden flex-col">
+  <div class="px-4 py-5 flex flex-col gap-4">
 
-    <div class="bg-white rounded-2xl shadow p-5 text-center">
-      <div class="text-4xl mb-2">📊</div>
-      <h2 class="text-navy font-bold text-xl">Buod ng Shift</h2>
-      <div id="endshift-bhw" class="text-gray-500 text-sm mt-1"></div>
+    <!-- BHW header -->
+    <div class="bg-white rounded-2xl shadow-sm p-5 text-center">
+      <div id="endshift-bhw" class="font-display font-bold text-navy text-xl"></div>
+      <div id="endshift-date" class="text-gray-500 text-sm mt-1"></div>
     </div>
 
-    <div class="grid grid-cols-2 gap-3">
-      <div class="bg-white rounded-2xl shadow p-4 text-center">
-        <div id="endshift-total" class="text-4xl font-black text-navy">0</div>
-        <div class="text-xs text-gray-500 mt-1">Kabuuang Pasyente</div>
+    <!-- Donut chart (patients triaged) -->
+    <div class="bg-white rounded-2xl shadow-sm p-5">
+      <h3 class="font-display font-bold text-navy text-base mb-4 text-center">Patients Triaged</h3>
+      <div class="flex items-center gap-5">
+        <div class="relative flex-shrink-0" style="width:140px;height:140px">
+          <svg id="donut-svg" viewBox="0 0 140 140" class="w-full h-full -rotate-90">
+            <circle cx="70" cy="70" r="52" fill="none" stroke="#e5e7eb" stroke-width="22"/>
+            <circle id="donut-seg-green"  cx="70" cy="70" r="52" fill="none" stroke="#2D6A2D" stroke-width="22" stroke-dasharray="0 327" stroke-linecap="butt"/>
+            <circle id="donut-seg-yellow" cx="70" cy="70" r="52" fill="none" stroke="#E67E22" stroke-width="22" stroke-dasharray="0 327" stroke-linecap="butt"/>
+            <circle id="donut-seg-red"    cx="70" cy="70" r="52" fill="none" stroke="#C0392B" stroke-width="22" stroke-dasharray="0 327" stroke-linecap="butt"/>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <div id="donut-total" class="font-display font-black text-4xl text-navy leading-none">0</div>
+            <div class="text-xs text-gray-400 mt-0.5">total</div>
+          </div>
+        </div>
+        <div class="flex flex-col gap-3 flex-1">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-danger flex-shrink-0"></div>
+              <span class="text-sm font-semibold text-gray-700">Critical</span>
+            </div>
+            <span id="donut-red-count" class="font-display font-black text-2xl text-danger">0</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-amber flex-shrink-0"></div>
+              <span class="text-sm font-semibold text-gray-700">Urgent</span>
+            </div>
+            <span id="donut-yellow-count" class="font-display font-black text-2xl text-amber">0</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-forest flex-shrink-0"></div>
+              <span class="text-sm font-semibold text-gray-700">Stable</span>
+            </div>
+            <span id="donut-green-count" class="font-display font-black text-2xl text-forest">0</span>
+          </div>
+        </div>
       </div>
-      <div class="bg-white rounded-2xl shadow p-4">
-        <div class="flex justify-between items-center mb-1">
-          <span class="text-xs font-bold text-danger">RED</span>
-          <span id="endshift-red" class="text-lg font-black text-danger">0</span>
-        </div>
-        <div class="flex justify-between items-center mb-1">
-          <span class="text-xs font-bold text-amber">YELLOW</span>
-          <span id="endshift-yellow" class="text-lg font-black text-amber">0</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-xs font-bold text-forest">GREEN</span>
-          <span id="endshift-green" class="text-lg font-black text-forest">0</span>
-        </div>
-      </div>
     </div>
 
-    <div class="bg-white rounded-2xl shadow p-5">
-      <h3 class="text-navy font-bold mb-2">Coordinator</h3>
-      <div id="endshift-email" class="text-gray-600 text-sm"></div>
-      <p class="text-gray-400 text-xs mt-2">Ang Excel report ay ipapadala sa email na ito.</p>
+    <!-- Top conditions (color-coded) -->
+    <div id="top-conditions-card" class="bg-white rounded-2xl shadow-sm p-5 hidden">
+      <h3 class="font-display font-bold text-navy text-base mb-3">Top Conditions This Shift</h3>
+      <div id="endshift-top-conditions" class="flex flex-col divide-y divide-gray-100"></div>
     </div>
 
+    <!-- Actions -->
     <div class="flex flex-col gap-3">
       <a id="btn-download-excel" href="#" target="_blank"
-        class="w-full bg-forest text-white font-bold py-4 rounded-2xl text-lg text-center active:scale-95 transition-transform block">
-        📥 I-Download ang Excel Report
+        class="w-full bg-forest text-white font-display font-bold py-4 rounded-2xl text-base text-center block active:scale-95 transition-transform">
+        📥 Download Excel Report
       </a>
-      <button onclick="sendShiftEmail()"
-        id="btn-send-email"
-        class="w-full bg-navy text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
-        📧 Ipadala ang Report sa Email
-      </button>
       <button onclick="confirmEndShift()"
-        class="w-full bg-danger text-white font-bold py-4 rounded-2xl text-lg active:scale-95 transition-transform">
-        ✔ Tapusin ang Shift
+        class="w-full bg-danger text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform">
+        ✔ FINISH & CLOSE SHIFT
       </button>
     </div>
+
+    <p class="text-center text-xs text-gray-400">GEMMA — Guided Emergency & Medical Management Assistant</p>
+
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- TOAST NOTIFICATION                                             -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-lg z-50 transition-all duration-300 opacity-0 pointer-events-none max-w-xs text-center"></div>
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- TOAST                                                           -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="toast"
+  class="fixed bottom-20 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-xl z-50 transition-all duration-300 opacity-0 pointer-events-none max-w-xs text-center"></div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- BOTTOM NAV (visible when shift is active)                      -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<nav id="bottom-nav" class="hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex z-40">
-  <button onclick="showScreen('screen-intake')" class="flex-1 flex flex-col items-center py-3 text-gray-500 active:text-navy" id="nav-intake">
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- BOTTOM NAV (visible when shift is active)                       -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<nav id="bottom-nav" class="hidden fixed bottom-0 bg-white border-t border-gray-200 flex z-40 h-[64px] w-full">
+  <button onclick="clearIntakeForm(); showScreen('screen-intake');" id="nav-patient"
+    class="flex-1 flex flex-col items-center justify-center gap-0.5 text-gray-400 active:text-navy">
     <span class="text-xl">➕</span>
-    <span class="text-xs mt-0.5">Pasyente</span>
+    <span class="text-xs font-semibold">Patient</span>
   </button>
-  <button onclick="showScreen('screen-log'); refreshPatientLog();" class="flex-1 flex flex-col items-center py-3 text-gray-500 active:text-navy" id="nav-log">
+  <button onclick="showScreen('screen-log'); refreshPatientLog();" id="nav-log"
+    class="flex-1 flex flex-col items-center justify-center gap-0.5 text-gray-400 active:text-navy relative">
     <span class="text-xl">📋</span>
-    <span class="text-xs mt-0.5">Log</span>
+    <span class="text-xs font-semibold">Log</span>
+    <span id="nav-patient-count" class="absolute top-2 right-6 bg-navy text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center hidden"></span>
   </button>
-  <button onclick="prepareEndShift(); showScreen('screen-endshift');" class="flex-1 flex flex-col items-center py-3 text-gray-500 active:text-navy" id="nav-end">
+  <button onclick="prepareEndShift(); showScreen('screen-endshift');" id="nav-shift"
+    class="flex-1 flex flex-col items-center justify-center gap-0.5 text-gray-400 active:text-navy">
     <span class="text-xl">🔴</span>
-    <span class="text-xs mt-0.5">Tapusin</span>
+    <span class="text-xs font-semibold">End Shift</span>
   </button>
 </nav>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- ERROR MODAL                                                    -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- ERROR MODAL                                                     -->
+<!-- ════════════════════════════════════════════════════════════════ -->
 <div id="error-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-6">
-  <div class="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full text-center">
+  <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center">
     <div class="text-4xl mb-3">⚠️</div>
-    <h3 class="text-navy font-bold text-lg mb-2">May Problema</h3>
-    <p id="error-message" class="text-gray-600 text-sm mb-4"></p>
-    <button onclick="closeErrorModal()" class="w-full bg-navy text-white font-bold py-3 rounded-xl">Sige, Nakaintindi</button>
+    <h3 class="font-display font-bold text-navy text-lg mb-2">Something went wrong</h3>
+    <p id="error-message" class="text-gray-600 text-sm mb-4 leading-relaxed"></p>
+    <button onclick="closeErrorModal()"
+      class="w-full bg-navy text-white font-bold py-3 rounded-xl">Got it</button>
   </div>
 </div>
 

@@ -40,7 +40,7 @@ async def seed():
                     {"rank": 4, "condition": "Tonsilitis", "plain_explanation": "Masakit ang lalamunan."},
                     {"rank": 5, "condition": "Heatstroke", "plain_explanation": "Kung mainit ang panahon."},
                 ]),
-                handoff_summary=json.dumps({
+                soap_notes=json.dumps({
                     "S": "Lagnat at sakit ng ulo mula kahapon.",
                     "O": "Walang larawan.",
                     "A": "Posibleng flu o viral infection.",
@@ -64,7 +64,7 @@ async def seed():
                     {"rank": 4, "condition": "GERD", "plain_explanation": "Acidity ng tiyan."},
                     {"rank": 5, "condition": "Anxiety attack", "plain_explanation": "Pag-aalala na nagdudulot ng sakit."},
                 ]),
-                handoff_summary=json.dumps({
+                soap_notes=json.dumps({
                     "S": "Nanghihina at nahihirapan huminga. Masakit ang dibdib.",
                     "O": "Walang larawan.",
                     "A": "Posibleng cardiac emergency.",
@@ -88,7 +88,7 @@ async def seed():
                     {"rank": 4, "condition": "Eczema", "plain_explanation": "Sakit sa balat."},
                     {"rank": 5, "condition": "Chickenpox", "plain_explanation": "Bulutong tubig."},
                 ]),
-                handoff_summary=json.dumps({
+                soap_notes=json.dumps({
                     "S": "Pantal sa braso at binti, mautak.",
                     "O": "Walang larawan.",
                     "A": "Posibleng allergic reaction.",

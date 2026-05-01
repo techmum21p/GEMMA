@@ -21,6 +21,13 @@ async def triage_text(
     chief_complaint: str = Form(...),
     followup_answers: str = Form(default="{}"),
     image_findings: str = Form(default=""),
+    bp: str = Form(default=""),
+    temperature: str = Form(default=""),
+    heart_rate: str = Form(default=""),
+    spo2: str = Form(default=""),
+    initial_assessment: str = Form(default=""),
+    age: str = Form(default=""),
+    sex: str = Form(default=""),
 ):
     import json
     try:
@@ -28,10 +35,28 @@ async def triage_text(
     except Exception:
         followup_dict = {}
 
+    try:
+        initial_dict = json.loads(initial_assessment) if initial_assessment else None
+    except Exception:
+        initial_dict = None
+
+    age_int = None
+    try:
+        age_int = int(age) if age else None
+    except ValueError:
+        pass
+
     result = await run_triage(
         chief_complaint=chief_complaint,
         image_findings=image_findings or None,
         followup_answers=followup_dict or None,
+        bp=bp or None,
+        temperature=temperature or None,
+        heart_rate=heart_rate or None,
+        spo2=spo2 or None,
+        initial_assessment=initial_dict,
+        age=age_int,
+        sex=sex or None,
     )
     return result
 
@@ -41,6 +66,12 @@ async def triage_with_image(
     chief_complaint: str = Form(...),
     image: UploadFile = File(...),
     followup_answers: str = Form(default="{}"),
+    bp: str = Form(default=""),
+    temperature: str = Form(default=""),
+    heart_rate: str = Form(default=""),
+    spo2: str = Form(default=""),
+    age: str = Form(default=""),
+    sex: str = Form(default=""),
 ):
     import json
 
@@ -56,10 +87,22 @@ async def triage_with_image(
     except Exception:
         followup_dict = {}
 
+    age_int = None
+    try:
+        age_int = int(age) if age else None
+    except ValueError:
+        pass
+
     result = await run_triage(
         chief_complaint=chief_complaint,
         image_findings=image_findings,
         followup_answers=followup_dict or None,
+        bp=bp or None,
+        temperature=temperature or None,
+        heart_rate=heart_rate or None,
+        spo2=spo2 or None,
+        age=age_int,
+        sex=sex or None,
     )
     result["image_path"] = str(img_path)
     result["image_findings"] = image_findings

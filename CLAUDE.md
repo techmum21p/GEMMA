@@ -136,6 +136,9 @@ timestamp: datetime
 name: str (nullable)
 age: int (nullable)
 sex: str (nullable)  # "M" or "F"
+address: str (nullable)  # barangay address for household profiling
+bp: str (nullable)  # manually entered, e.g. "120/80"
+temperature: str (nullable)  # manually entered, e.g. "38.2°C"
 chief_complaint: str
 image_path: str (nullable)
 image_findings: str (nullable)
@@ -254,16 +257,24 @@ tailwind.config = {
 }
 ```
 
+### Language Rules
+- **Default to English** for all UI labels, buttons, and instructions — English is self-explanatory and reduces confusion
+- Use Filipino/Taglish **only** where it adds clarity or avoids ambiguity (e.g., medical terms, local context like "Barangay", AI disclaimer)
+- The AI disclaimer stays in Filipino: *"Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor."*
+- Chief complaint placeholder text may use Taglish to guide BHW input
+- Do NOT translate self-explanatory English labels (Name, Age, Sex, Status, Save, etc.) into Filipino
+
 ### UI Rules
 - Minimum tap target: 48px height for all buttons
 - Font size minimum: 16px for body, 20px+ for key labels
 - Triage color badges must be full-width, high contrast
-- All primary UI labels in Filipino / Taglish
+- **Intuitive, minimal manual entry** — use smart defaults, auto-fill where possible, toggles/selects over free text
 - Camera button must use `getUserMedia` API (works in Chrome Android)
+- Triage status badges: use only RED / YELLOW / GREEN — no invented sub-categories
 
 ### Screens (show/hide via `data-screen` attribute + JS)
-1. `screen-home` — BHW name + coordinator email input, Start Shift button
-2. `screen-intake` — chief complaint input, optional photo capture
+1. `screen-home` — BHW name input only (no coordinator email here), Start Shift button
+2. `screen-intake` — patient profiling + vital signs (optional) + chief complaint + optional photo capture
 3. `screen-result` — triage badge, top 5, follow-up questions
 4. `screen-summary` — SOAP note, Generate PDF button
 5. `screen-log` — patient table for current shift

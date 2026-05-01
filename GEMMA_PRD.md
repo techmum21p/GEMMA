@@ -16,6 +16,32 @@ Barangay health centers across the Philippines face a daily reality: long queues
 
 ---
 
+## 1a. BHS Triage Context — How It Actually Works
+
+Understanding the real-world BHS workflow is critical to designing GEMMA correctly. The standard 4-step process at Philippine Barangay Health Centers:
+
+### Step 1 — Initial Reception
+BHWs greet patients and collect basic personal details: name, address, and family information. This data is recorded in forms and household profiles for community tracking. GEMMA must support this profiling step before any clinical assessment begins.
+
+### Step 2 — Symptom Assessment
+Staff quickly note the chief complaint (colds, cough, diarrhea, wounds, dengue symptoms, etc.) and check for emergency signs. Vital signs (blood pressure, temperature) are measured manually by the BHW — particularly for priority cases. GEMMA captures this data as structured input to the AI pipeline.
+
+### Step 3 — Categorization & Disposition
+Patients are sorted into one of three disposition paths — which map directly to GEMMA's triage levels:
+
+| BHS Disposition | GEMMA Level | Meaning |
+|---|---|---|
+| Refer to RHU / hospital | 🔴 RED | Urgent — requires higher-level facility |
+| Doctor consultation at BHS | 🟡 YELLOW | Non-urgent — needs on-site doctor |
+| Home treatment / BHW management | 🟢 GREEN | Mild — BHW handles, home care instructions |
+
+### Step 4 — Common Services Post-Triage
+After categorization, patients queue for: general consultations, minor treatments (first aid, wound care), immunizations, prenatal check-ups, and health monitoring. During outbreaks (e.g., dengue), quick home-care instructions are given to GREEN patients. GEMMA's patient log and shift report capture this full service picture.
+
+> **Design implication:** GEMMA's intake flow must mirror this 4-step sequence — reception first, symptoms second, AI assessment third, status tracking fourth. Do not skip the reception/profiling step.
+
+---
+
 ## 2. Goals & Success Metrics
 
 | Goal | Metric |
@@ -51,35 +77,38 @@ Barangay health centers across the Philippines face a daily reality: long queues
 
 ## 4. Core Features (MVP Scope)
 
-### F01 — Symptom Intake (Text / Taglish)
-- BHW types or speaks patient's chief complaint
-- Accepts Filipino, Taglish, and English input
-- Simple text field with large font, mobile-optimized
+### F01 — Patient Reception + Symptom Intake ✅
+- **Step 1 — Basic Profiling:** BHW enters patient name (optional), age, sex, barangay address (optional), and family contact — mirrors the BHS household profiling form
+- **Step 2 — Vital Signs (optional manual entry):** BHW can enter BP (e.g., "120/80") and temperature if already measured — feeds into the AI assessment as objective data
+- **Step 3 — Chief Complaint:** BHW types patient's main symptom in Taglish / Filipino / English
+- Simple large-font fields, mobile-optimized — minimum 48px tap targets
+- All fields except chief complaint are optional to keep intake fast
 
-### F02 — Photo Capture + MedGemma Image Analysis
+### F02 — Photo Capture + MedGemma Image Analysis ✅
 - BHW takes a photo of visible condition (wound, rash, swelling, etc.)
 - MedGemma 4B analyzes the image
 - Visual findings merged with symptom text for holistic assessment
 - Triggered only when complaint is visible/external
 
-### F03 — Triage Priority Output (Red / Yellow / Green)
-- **🔴 RED** — Needs immediate doctor attention / referral
-- **🟡 YELLOW** — Needs doctor consultation, non-urgent
-- **🟢 GREEN** — Can be managed at BHW level / monitoring only
-- Color-coded, large display — readable at a glance
+### F03 — Triage Priority Output (Red / Yellow / Green) ✅
+- **🔴 RED** — Refer to RHU or higher-level facility immediately
+- **🟡 YELLOW** — Needs on-site doctor consultation (non-urgent, wait for BHS doctor)
+- **🟢 GREEN** — BHW-managed; home treatment + care instructions sufficient
+- Color-coded full-width badge — readable at a glance even outdoors / under fluorescent light
+- Displayed alongside the recommended **disposition action** in plain Filipino (e.g., "I-refer sa RHU", "Puntahan ang doktor dito", "Maaaring umuwi na")
 
-### F04 — Top 5 Possible Conditions
+### F04 — Top 5 Possible Conditions ✅
 - Gemma 4 generates a ranked list of possible conditions based on symptoms + image
 - Displayed as plain language (not medical jargon) for BHW context
 - Always accompanied by disclaimer: *"Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor."*
 
-### F05 — Guided Follow-Up Questions
+### F05 — Guided Follow-Up Questions ✅
 - After initial triage, GEMMA generates 3–5 follow-up questions
 - Helps BHW gather more structured information
 - Questions are in Filipino / simple English
 - BHW inputs answers; GEMMA refines triage output if needed
 
-### F06 — Doctor Handoff Summary + PDF Export
+### F06 — Doctor Handoff Summary + PDF Export ✅
 - Auto-generated SOAP-lite note per patient:
   - **S** — Subjective (chief complaint, symptoms reported)
   - **O** — Objective (visible findings from image, vitals if entered)
@@ -89,17 +118,17 @@ Barangay health centers across the Philippines face a daily reality: long queues
 - **On-demand PDF generation** — BHW taps "Generate PDF" to produce a formatted handoff document
 - PDF includes: patient info, triage level badge, top 5 conditions, SOAP note, timestamp, BHW name, GEMMA disclaimer
 - PDF can be printed at the health center OR shared digitally (via messaging app, email) to the doctor
-- Generated locally using `weasyprint` or `reportlab` — no cloud dependency
+- Generated locally using `reportlab` — no cloud dependency (WeasyPrint removed; requires system libs not portable across judges' machines)
 
 > 📌 **Future scope:** Direct send to doctor's device / EMR system integration
 
-### F07 — Patient Log Table
+### F07 — Patient Log Table ✅
 - Running table of all patients triaged in the current shift
 - Columns: `#`, `Time`, `Name` (optional), `Chief Complaint`, `Triage Level`, `Top Condition`, `Status`
 - BHW can mark patient as `Seen by Doctor` / `Referred` / `Sent Home`
 - Stored locally in SQLite — no cloud dependency
 
-### F08 — End-of-Shift Export + Email
+### F08 — End-of-Shift Export + Email ✅
 - BHW taps "End Shift" button
 - Patient log exported as `.xlsx` file
 - Summary stats generated: total patients, breakdown by triage level
@@ -131,31 +160,37 @@ Barangay health centers across the Philippines face a daily reality: long queues
          ↓
 [BHW opens GEMMA on Android / laptop]
          ↓
-[BHW taps "New Patient"]
+[BHW taps "Bagong Pasyente" (New Patient)]
          ↓
-[Enters chief complaint in Taglish / English]
+── STEP 1: RECEPTION / PROFILING ──────────────────
+[BHW enters: name (opt), age, sex, address (opt)]
+[Vital signs if already measured: BP, temp (opt)]
+         ↓
+── STEP 2: SYMPTOM INTAKE ─────────────────────────
+[BHW types chief complaint in Taglish / Filipino]
          ↓
 [Is condition visible? YES → Take photo → MedGemma analyzes]
                          NO  → Skip photo
          ↓
+── STEP 3: AI ASSESSMENT ──────────────────────────
 [GEMMA outputs:]
-  • 🔴/🟡/🟢 Triage Level
-  • Top 5 Possible Conditions
+  • 🔴/🟡/🟢 Triage Level + Disposition Action
+  • Top 5 Possible Conditions (plain Filipino)
   • 3–5 Follow-up Questions
          ↓
 [BHW asks follow-up Qs, inputs answers]
-         ↓
 [GEMMA refines assessment if needed]
          ↓
-[Doctor Handoff Summary generated]
-         ↓
+── STEP 4: STATUS TRACKING ────────────────────────
+[Doctor Handoff Summary / SOAP note generated]
 [Patient added to shift log table]
+[BHW routes patient: Referral / Doctor queue / Home]
          ↓
-[Doctor sees patient → BHW updates status]
+[Doctor sees patient → BHW marks status]
          ↓
         ...repeat for next patient...
          ↓
-[BHW taps "End Shift"]
+[BHW taps "Tapusin ang Shift" (End Shift)]
          ↓
 [Excel export generated + emailed to coordinator]
 ```
@@ -227,6 +262,9 @@ User Input (text + optional image)
 | `name` | TEXT | Optional patient name |
 | `age` | INTEGER | Optional |
 | `sex` | TEXT | Optional (M/F) |
+| `address` | TEXT | Optional barangay address (household profile) |
+| `bp` | TEXT | Optional manually-entered blood pressure (e.g., "120/80") |
+| `temperature` | TEXT | Optional manually-entered temperature (e.g., "38.2°C") |
 | `chief_complaint` | TEXT | Raw symptom input |
 | `image_path` | TEXT | Local path to photo (if taken) |
 | `image_findings` | TEXT | MedGemma output |
@@ -257,7 +295,9 @@ User Input (text + optional image)
 - **Large touch targets** — minimum 48px tap areas for BHW usability
 - **High contrast** — readable in outdoor / fluorescent lighting
 - **Minimal text** — icons + color + short labels wherever possible
-- **Filipino language** — all UI labels in Filipino / Taglish
+- **Intuitive, minimal manual entry** — smart defaults, auto-fill, toggles/selects over free text wherever possible
+- **English-first UI** — use English for all standard labels and buttons; Filipino only where it adds clarity or avoids ambiguity (e.g., AI disclaimer, culturally specific terms)
+- **AI disclaimer stays in Filipino:** *"Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor."*
 
 ### Color Palette (Barangay Platero)
 
@@ -272,8 +312,8 @@ User Input (text + optional image)
 | `--white` | `#FFFFFF` | Surface |
 
 ### Key Screens
-1. **Home / Shift Start** — BHW name input, start shift button
-2. **New Patient Intake** — complaint input, photo button
+1. **Home / Shift Start** — BHW name input only (coordinator email collected separately at end-shift, not on login)
+2. **New Patient Intake** — patient profiling + optional vital signs + chief complaint + optional photo
 3. **Triage Result** — large color badge, top 5, follow-up Qs
 4. **Handoff Summary** — SOAP note, "Generate PDF" button, shareable/printable output
 5. **Patient Log** — table of current shift patients

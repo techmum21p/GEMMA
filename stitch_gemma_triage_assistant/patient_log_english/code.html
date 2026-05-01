@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Public+Sans:wght@600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary": "#002452",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#ffe08b",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-container-low": "#f0f4f8",
+                    "on-primary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "on-secondary-fixed": "#002203",
+                    "secondary-fixed-dim": "#95d78d",
+                    "on-tertiary-fixed": "#241a00",
+                    "surface-container-highest": "#dfe3e7",
+                    "error-container": "#ffdad6",
+                    "on-tertiary": "#ffffff",
+                    "secondary": "#2e6b2e",
+                    "tertiary-fixed-dim": "#f0c110",
+                    "secondary-fixed": "#b0f3a6",
+                    "surface-container": "#eaeef2",
+                    "outline-variant": "#c4c6d0",
+                    "surface-variant": "#dfe3e7",
+                    "surface-dim": "#d6dade",
+                    "on-secondary-container": "#326f32",
+                    "surface-tint": "#425e91",
+                    "primary-container": "#1b3a6b",
+                    "surface-bright": "#f6fafe",
+                    "secondary-container": "#adf0a4",
+                    "surface-container-high": "#e4e9ed",
+                    "on-tertiary-container": "#4f3d00",
+                    "on-primary-fixed": "#001a40",
+                    "on-secondary-fixed-variant": "#135218",
+                    "background": "#f6fafe",
+                    "inverse-surface": "#2c3134",
+                    "primary-fixed-dim": "#acc7ff",
+                    "inverse-on-surface": "#edf1f5",
+                    "on-primary-container": "#89a5dd",
+                    "surface": "#f6fafe",
+                    "on-primary-fixed-variant": "#294678",
+                    "on-tertiary-fixed-variant": "#584400",
+                    "on-error-container": "#93000a",
+                    "on-secondary": "#ffffff",
+                    "outline": "#747780",
+                    "inverse-primary": "#acc7ff",
+                    "on-surface": "#171c1f",
+                    "on-surface-variant": "#44474f",
+                    "primary-fixed": "#d7e2ff",
+                    "tertiary": "#745b00",
+                    "tertiary-container": "#d0a600",
+                    "on-background": "#171c1f"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-gap": "12px",
+                    "container-padding": "16px",
+                    "touch-target-min": "48px",
+                    "section-gap": "24px",
+                    "nav-height": "56px"
+            },
+            "fontFamily": {
+                    "label-xl": ["Inter"],
+                    "headline-md": ["Public Sans"],
+                    "label-bold": ["Inter"],
+                    "headline-lg": ["Public Sans"],
+                    "button": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "label-xl": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-bold": ["16px", {"lineHeight": "20px", "fontWeight": "700"}],
+                    "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "button": ["18px", {"lineHeight": "18px", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "26px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        body {
+            background-color: #f0f4f8; /* Fixed background per design system guidance */
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="font-body-md text-on-background min-h-screen flex flex-col pb-[56px]">
+<!-- TopAppBar Section -->
+<header class="bg-primary text-on-primary shadow-md docked full-width top-0 flex items-center justify-between px-4 h-16 w-full z-50 sticky">
+<div class="flex items-center gap-3">
+<button class="active:scale-95 transition-transform hover:opacity-80">
+<span class="material-symbols-outlined text-white" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-headline-md text-white">Patient Log</h1>
+</div>
+<div class="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-bold text-sm">
+            12
+        </div>
+</header>
+<!-- Filters Strip -->
+<section class="bg-surface sticky top-16 z-40 px-4 py-4 overflow-x-auto no-scrollbar">
+<div class="flex gap-2 w-max">
+<button class="px-6 py-2 rounded-full bg-primary text-on-primary font-label-bold text-sm transition-all shadow-sm">All</button>
+<button class="px-6 py-2 rounded-full bg-white border border-error text-error font-label-bold text-sm transition-all hover:bg-error-container">RED</button>
+<button class="px-6 py-2 rounded-full bg-white border border-tertiary text-tertiary font-label-bold text-sm transition-all hover:bg-tertiary-container">YELLOW</button>
+<button class="px-6 py-2 rounded-full bg-white border border-secondary text-secondary font-label-bold text-sm transition-all hover:bg-secondary-container">GREEN</button>
+</div>
+</section>
+<!-- Patient List Content -->
+<main class="flex-1 px-4 py-4 space-y-3 overflow-y-auto">
+<!-- Patient Card: Red Priority -->
+<div class="bg-white rounded-xl p-4 shadow-[0_2px_4px_rgba(27,58,107,0.08)] border-l-8 border-error flex items-start justify-between gap-3">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="text-xs font-bold text-outline uppercase tracking-wider">#2024-0892</span>
+<span class="px-2 py-0.5 rounded-full bg-error-container text-on-error-container text-[10px] font-bold uppercase">Emergency</span>
+</div>
+<h3 class="font-label-bold text-primary text-lg mb-0.5">Difficulty breathing</h3>
+<p class="font-body-md text-on-surface-variant">Juan Dela Cruz, 45y/o</p>
+<div class="mt-3 flex items-center justify-between">
+<span class="text-xs text-outline flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="schedule">schedule</span> 10:24 AM
+                    </span>
+<div class="flex items-center gap-1 text-primary font-bold text-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="clinical_notes">clinical_notes</span>
+                        Referred
+                    </div>
+</div>
+</div>
+<div class="w-4 h-4 rounded-full bg-error mt-1 ring-4 ring-error-container"></div>
+</div>
+<!-- Patient Card: Yellow Priority -->
+<div class="bg-white rounded-xl p-4 shadow-[0_2px_4px_rgba(27,58,107,0.08)] border-l-8 border-tertiary flex items-start justify-between gap-3">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="text-xs font-bold text-outline uppercase tracking-wider">#2024-0891</span>
+<span class="px-2 py-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-[10px] font-bold uppercase">Observation</span>
+</div>
+<h3 class="font-label-bold text-primary text-lg mb-0.5">High fever</h3>
+<p class="font-body-md text-on-surface-variant">Maria Clara, 28y/o</p>
+<div class="mt-3 flex items-center justify-between">
+<span class="text-xs text-outline flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="schedule">schedule</span> 10:15 AM
+                    </span>
+<div class="flex items-center gap-1 text-on-surface-variant font-bold text-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="sync">sync</span>
+                        Pending Triage
+                    </div>
+</div>
+</div>
+<div class="w-4 h-4 rounded-full bg-tertiary mt-1 ring-4 ring-tertiary-container/30"></div>
+</div>
+<!-- Patient Card: Green Priority -->
+<div class="bg-white rounded-xl p-4 shadow-[0_2px_4px_rgba(27,58,107,0.08)] border-l-8 border-secondary flex items-start justify-between gap-3">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="text-xs font-bold text-outline uppercase tracking-wider">#2024-0890</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold uppercase">Routine</span>
+</div>
+<h3 class="font-label-bold text-primary text-lg mb-0.5">Body ache</h3>
+<p class="font-body-md text-on-surface-variant">Ricardo Dalisay, 32y/o</p>
+<div class="mt-3 flex items-center justify-between">
+<span class="text-xs text-outline flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="schedule">schedule</span> 09:45 AM
+                    </span>
+<div class="flex items-center gap-1 text-secondary font-bold text-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="check_circle">check_circle</span>
+                        Discharged
+                    </div>
+</div>
+</div>
+<div class="w-4 h-4 rounded-full bg-secondary mt-1 ring-4 ring-secondary-container/30"></div>
+</div>
+<!-- Patient Card: Yellow Priority -->
+<div class="bg-white rounded-xl p-4 shadow-[0_2px_4px_rgba(27,58,107,0.08)] border-l-8 border-tertiary flex items-start justify-between gap-3">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="text-xs font-bold text-outline uppercase tracking-wider">#2024-0889</span>
+<span class="px-2 py-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-[10px] font-bold uppercase">Urgent</span>
+</div>
+<h3 class="font-label-bold text-primary text-lg mb-0.5">Severe cough</h3>
+<p class="font-body-md text-on-surface-variant">Luzviminda Santos, 61y/o</p>
+<div class="mt-3 flex items-center justify-between">
+<span class="text-xs text-outline flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="schedule">schedule</span> 09:12 AM
+                    </span>
+<div class="flex items-center gap-1 text-primary font-bold text-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="clinical_notes">clinical_notes</span>
+                        Referred
+                    </div>
+</div>
+</div>
+<div class="w-4 h-4 rounded-full bg-tertiary mt-1 ring-4 ring-tertiary-container/30"></div>
+</div>
+<!-- Patient Card: Green Priority -->
+<div class="bg-white rounded-xl p-4 shadow-[0_2px_4px_rgba(27,58,107,0.08)] border-l-8 border-secondary flex items-start justify-between gap-3">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="text-xs font-bold text-outline uppercase tracking-wider">#2024-0888</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold uppercase">Consult</span>
+</div>
+<h3 class="font-label-bold text-primary text-lg mb-0.5">Diabetes Check-up</h3>
+<p class="font-body-md text-on-surface-variant">Emilio Aguinaldo, 74y/o</p>
+<div class="mt-3 flex items-center justify-between">
+<span class="text-xs text-outline flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="schedule">schedule</span> 08:55 AM
+                    </span>
+<div class="flex items-center gap-1 text-secondary font-bold text-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="check_circle">check_circle</span>
+                        Completed
+                    </div>
+</div>
+</div>
+<div class="w-4 h-4 rounded-full bg-secondary mt-1 ring-4 ring-secondary-container/30"></div>
+</div>
+</main>
+<!-- FAB: Patient Log Screen focused action -->
+<button class="fixed bottom-20 right-6 w-14 h-14 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-xl z-50 active:scale-90 transition-all">
+<span class="material-symbols-outlined text-3xl" data-icon="add">add</span>
+</button>
+<!-- BottomNavBar Section -->
+<nav class="fixed bottom-0 w-full h-[56px] z-50 flex justify-around items-center px-2 bg-white dark:bg-slate-900 shadow-[0_-2px_10px_rgba(27,58,107,0.08)] border-t border-slate-200 dark:border-slate-800">
+<div class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-90 transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-['Public_Sans'] text-[10px] font-bold uppercase tracking-wider">Home</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-90 transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="person_add">person_add</span>
+<span class="font-['Public_Sans'] text-[10px] font-bold uppercase tracking-wider">Patient</span>
+</div>
+<div class="flex flex-col items-center justify-center text-primary dark:text-blue-300 scale-110 active:scale-90 transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="receipt_long" style="font-variation-settings: 'FILL' 1;">receipt_long</span>
+<span class="font-['Public_Sans'] text-[10px] font-bold uppercase tracking-wider">Log</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-90 transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-['Public_Sans'] text-[10px] font-bold uppercase tracking-wider">Shift</span>
+</div>
+</nav>
+</body></html>

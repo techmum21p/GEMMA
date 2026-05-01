@@ -1,5 +1,37 @@
 /* GEMMA custom styles — supplements Tailwind CDN */
 
+/* ── Brand colors (defined here so Tailwind CDN config isn't needed) ── */
+.bg-navy    { background-color: #1B3A6B !important; }
+.bg-forest  { background-color: #2D6A2D !important; }
+.bg-danger  { background-color: #C0392B !important; }
+.bg-amber   { background-color: #E67E22 !important; }
+.bg-gold    { background-color: #F5C518 !important; }
+.bg-light   { background-color: #F0F4F8 !important; }
+
+.text-navy   { color: #1B3A6B !important; }
+.text-forest { color: #2D6A2D !important; }
+.text-danger { color: #C0392B !important; }
+.text-amber  { color: #E67E22 !important; }
+.text-gold   { color: #F5C518 !important; }
+
+.border-navy   { border-color: #1B3A6B !important; }
+.border-forest { border-color: #2D6A2D !important; }
+.border-danger { border-color: #C0392B !important; }
+.border-amber  { border-color: #E67E22 !important; }
+.border-gold   { border-color: #F5C518 !important; }
+
+.border-t-navy   { border-top-color: #1B3A6B !important; }
+.border-t-forest { border-top-color: #2D6A2D !important; }
+.border-t-danger { border-top-color: #C0392B !important; }
+.border-t-amber  { border-top-color: #E67E22 !important; }
+
+.focus\:border-navy:focus { border-color: #1B3A6B !important; }
+.accent-navy { accent-color: #1B3A6B; }
+
+/* amber/10 and amber/40 tint utilities used in disclaimer boxes */
+.bg-amber\/10  { background-color: rgba(230,126,34,0.10) !important; }
+.border-amber\/40 { border-color: rgba(230,126,34,0.40) !important; }
+
 * {
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;

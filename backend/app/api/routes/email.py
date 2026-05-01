@@ -25,13 +25,18 @@ async def send_email_report(payload: EmailRequest, db: AsyncSession = Depends(ge
     )
     patients = result.scalars().all()
 
+    # Use email override from request if provided (collected on end-shift screen)
+    recipient_email = payload.coordinator_email or shift.coordinator_email
+    if not recipient_email:
+        raise HTTPException(status_code=400, detail="No coordinator email provided.")
+
     shift_dict = {
         "id": shift.id,
         "bhw_name": shift.bhw_name,
         "date": shift.date,
         "start_time": shift.start_time,
         "end_time": shift.end_time,
-        "coordinator_email": shift.coordinator_email,
+        "coordinator_email": recipient_email,
     }
     patients_list = [
         {
@@ -57,4 +62,4 @@ async def send_email_report(payload: EmailRequest, db: AsyncSession = Depends(ge
             detail="Hindi ma-send ang email. Suriin ang SMTP settings sa .env file.",
         )
 
-    return {"message": f"Naipadala ang shift report sa {shift.coordinator_email}", "excel_path": excel_path}
+    return {"message": f"Shift report sent to {recipient_email}", "excel_path": excel_path}

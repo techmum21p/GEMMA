@@ -24,16 +24,21 @@ def _patient_to_dict(patient: Patient) -> dict:
         "name": patient.name,
         "age": patient.age,
         "sex": patient.sex,
+        "address": getattr(patient, "address", None),
+        "bp": getattr(patient, "bp", None),
+        "temperature": getattr(patient, "temperature", None),
+        "heart_rate": getattr(patient, "heart_rate", None),
+        "spo2": getattr(patient, "spo2", None),
         "chief_complaint": patient.chief_complaint,
         "image_path": patient.image_path,
         "image_findings": patient.image_findings,
         "followup_qa": patient.followup_qa,
         "triage_level": patient.triage_level,
+        "triage_reason": getattr(patient, "triage_reason", "") or "",
         "top_conditions": patient.top_conditions,
-        "handoff_summary": patient.handoff_summary,
+        "soap_notes": patient.soap_notes,
         "status": patient.status,
         "pdf_path": patient.pdf_path,
-        "triage_reason": "",
         "disclaimer": "Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor.",
     }
 
@@ -90,5 +95,5 @@ async def export_pdf(patient_id: int, db: AsyncSession = Depends(get_db)):
     return FileResponse(
         path=pdf_path,
         media_type="application/pdf",
-        filename=Path(pdf_path).name,
+        headers={"Content-Disposition": f'inline; filename="{Path(pdf_path).name}"'},
     )

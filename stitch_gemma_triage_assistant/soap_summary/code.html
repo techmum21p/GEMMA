@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "surface-container": "#eeedf5",
+                    "on-error-container": "#93000a",
+                    "on-background": "#1a1b21",
+                    "secondary-fixed": "#dbe3f1",
+                    "surface-bright": "#faf8ff",
+                    "on-surface-variant": "#444652",
+                    "outline": "#747683",
+                    "on-surface": "#1a1b21",
+                    "primary-fixed-dim": "#b4c5ff",
+                    "surface-variant": "#e3e2ea",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "on-primary": "#ffffff",
+                    "primary-container": "#003087",
+                    "on-error": "#ffffff",
+                    "secondary": "#575f6b",
+                    "tertiary-fixed": "#e2e2e2",
+                    "on-primary-fixed-variant": "#1c4197",
+                    "on-secondary-container": "#5d6571",
+                    "error": "#ba1a1a",
+                    "on-secondary": "#ffffff",
+                    "surface": "#faf8ff",
+                    "outline-variant": "#c4c6d4",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-high": "#e8e7ef",
+                    "error-container": "#ffdad6",
+                    "surface-container-low": "#f4f3fb",
+                    "inverse-primary": "#b4c5ff",
+                    "on-secondary-fixed": "#141c26",
+                    "tertiary": "#212323",
+                    "on-primary-fixed": "#00174b",
+                    "inverse-surface": "#2f3036",
+                    "on-primary-container": "#7f9df8",
+                    "tertiary-container": "#363838",
+                    "surface-container-highest": "#e3e2ea",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "primary": "#001d59",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-container": "#a0a1a1",
+                    "on-secondary-fixed-variant": "#3f4752",
+                    "secondary-container": "#dbe3f1",
+                    "primary-fixed": "#dbe1ff",
+                    "background": "#faf8ff",
+                    "surface-dim": "#dad9e1",
+                    "surface-tint": "#3959b0",
+                    "inverse-on-surface": "#f1f0f8",
+                    "secondary-fixed-dim": "#bfc7d4"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "base": "8px",
+                    "margin-mobile": "16px",
+                    "md": "16px",
+                    "gutter": "16px",
+                    "sm": "8px",
+                    "xs": "4px",
+                    "lg": "24px"
+            },
+            "fontFamily": {
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-bold": ["Inter"],
+                    "display": ["Inter"],
+                    "caption": ["Inter"],
+                    "h2": ["Inter"],
+                    "label-md": ["Inter"],
+                    "h1": ["Inter"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "label-bold": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "display": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "caption": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                    "h2": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "fontWeight": "600"}],
+                    "h1": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #faf8ff;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background antialiased flex flex-col min-h-[844px] w-[390px] mx-auto overflow-x-hidden border-x border-outline-variant shadow-2xl">
+<!-- TopAppBar -->
+<header class="bg-white dark:bg-slate-900 shadow-sm border-b border-slate-200 dark:border-slate-800 flex justify-between items-center w-full px-4 h-16 sticky top-0 z-50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-blue-900 dark:text-blue-300">medical_services</span>
+<h1 class="text-xl font-black text-blue-900 dark:text-blue-100 uppercase tracking-widest font-inter">GEMMA</h1>
+</div>
+<div class="flex items-center gap-2 px-3 py-1 rounded-full border border-blue-900 text-blue-900 dark:text-blue-300 font-inter font-bold tracking-tight text-xs">
+            ON SHIFT
+        </div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 px-margin-mobile py-lg pb-32">
+<!-- Navigation Back Link -->
+<a class="inline-flex items-center gap-2 mb-lg text-primary hover:opacity-80 transition-opacity" href="#">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+<span class="font-label-md text-label-md">Back to Patient Log</span>
+</a>
+<!-- Screen Headline -->
+<div class="mb-lg">
+<h2 class="font-h1 text-h1 text-on-surface mb-1">Patient Summary</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Encounter ID: #M-992-04</p>
+</div>
+<!-- Demographic Chip Row -->
+<div class="flex flex-wrap gap-sm mb-lg">
+<div class="bg-surface-container-high px-3 py-2 rounded-lg flex items-center gap-2">
+<span class="font-label-bold text-label-bold text-on-surface">28y</span>
+</div>
+<div class="bg-surface-container-high px-3 py-2 rounded-lg flex items-center gap-2">
+<span class="font-label-bold text-label-bold text-on-surface">Male</span>
+</div>
+<div class="bg-error px-3 py-2 rounded-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-white text-[16px]" style="font-variation-settings: 'FILL' 1;">emergency</span>
+<span class="font-label-bold text-label-bold text-white uppercase">Red Triage</span>
+</div>
+</div>
+<!-- SOAP Note Card -->
+<div class="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden mb-xl">
+<!-- Subjective -->
+<div class="p-md border-b border-outline-variant">
+<div class="flex items-center gap-2 mb-sm">
+<div class="w-8 h-8 rounded bg-primary-container text-on-primary-container flex items-center justify-center font-bold">S</div>
+<span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Subjective</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                    Patient presents with acute onset of intense chest pain radiating to left arm. Rated 9/10. Reports nausea and shortness of breath starting 30 minutes prior to arrival. Patient describes pain as "crushing pressure."
+                </p>
+</div>
+<!-- Objective -->
+<div class="p-md border-b border-outline-variant bg-surface-container-lowest">
+<div class="flex items-center gap-2 mb-sm">
+<div class="w-8 h-8 rounded bg-primary-container text-on-primary-container flex items-center justify-center font-bold">O</div>
+<span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Objective</span>
+</div>
+<div class="space-y-2">
+<p class="font-body-md text-body-md text-on-surface-variant">
+<strong class="text-on-surface">Vitals:</strong> BP 162/95, HR 108, SpO2 94% on RA, Temp 37.2°C.
+                    </p>
+<p class="font-body-md text-body-md text-on-surface-variant">
+<strong class="text-on-surface">Exam:</strong> Diaphoretic, mildly cyanotic lips. Cardiac exam reveals tachycardia without murmurs. Lung fields clear bilaterally.
+                    </p>
+</div>
+</div>
+<!-- Assessment -->
+<div class="p-md border-b border-outline-variant">
+<div class="flex items-center gap-2 mb-sm">
+<div class="w-8 h-8 rounded bg-primary-container text-on-primary-container flex items-center justify-center font-bold">A</div>
+<span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Assessment</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant italic">
+                    Suspected acute myocardial infarction (STEMI) given presentation and clinical markers. Differentials include aortic dissection and pulmonary embolism.
+                </p>
+</div>
+<!-- Plan -->
+<div class="p-md">
+<div class="flex items-center gap-2 mb-sm">
+<div class="w-8 h-8 rounded bg-primary-container text-on-primary-container flex items-center justify-center font-bold">P</div>
+<span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Plan</span>
+</div>
+<ul class="space-y-2">
+<li class="flex gap-2 text-on-surface-variant font-body-md text-body-md">
+<span class="text-primary">•</span> 
+                        Immediate cardiology consult paged.
+                    </li>
+<li class="flex gap-2 text-on-surface-variant font-body-md text-body-md">
+<span class="text-primary">•</span> 
+                        Administered ASA 324mg and SL NTG x1.
+                    </li>
+<li class="flex gap-2 text-on-surface-variant font-body-md text-body-md">
+<span class="text-primary">•</span> 
+                        Continuous 12-lead ECG monitoring initiated.
+                    </li>
+</ul>
+</div>
+</div>
+<!-- Action Button -->
+<div class="border border-tertiary-container rounded-xl p-md mb-lg flex items-start gap-3 bg-[#fff9c4]">
+<span class="material-symbols-outlined text-tertiary text-xl" style="font-variation-settings: 'FILL' 1;">warning</span>
+<p class="text-on-surface-variant font-body-md text-sm italic leading-tight">
+    This is not an official medical record. Used only for quick handoff summary between frontline health workers.
+  </p>
+</div><button class="w-full h-[56px] bg-primary-container text-white rounded-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-transform shadow-lg">
+<span class="material-symbols-outlined">download</span>
+<span class="font-label-bold text-label-bold">Generate PDF Handoff</span>
+</button>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 h-[72px] z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+<div class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:text-blue-700 dark:hover:text-blue-300 active:scale-95 transition-transform duration-100">
+<span class="material-symbols-outlined" data-icon="emergency">emergency</span>
+<span class="font-inter text-[11px] font-semibold uppercase mt-1">Triage</span>
+</div>
+<div class="flex flex-col items-center justify-center text-blue-900 dark:text-blue-100 bg-blue-50 dark:bg-blue-900/40 rounded-xl px-4 py-1 active:scale-95 transition-transform duration-100">
+<span class="material-symbols-outlined" data-icon="group" style="font-variation-settings: 'FILL' 1;">group</span>
+<span class="font-inter text-[11px] font-semibold uppercase mt-1">Patients</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:text-blue-700 dark:hover:text-blue-300 active:scale-95 transition-transform duration-100">
+<span class="material-symbols-outlined" data-icon="format_list_bulleted">format_list_bulleted</span>
+<span class="font-inter text-[11px] font-semibold uppercase mt-1">Queue</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:text-blue-700 dark:hover:text-blue-300 active:scale-95 transition-transform duration-100">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-inter text-[11px] font-semibold uppercase mt-1">Profile</span>
+</div>
+</nav>
+</body></html>

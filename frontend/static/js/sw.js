@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gemma-v1';
+const CACHE_NAME = 'gemma-v2';
 const STATIC_ASSETS = [
   '/',
   '/static/css/app.css',

@@ -35,7 +35,7 @@ MOCK_PATIENTS = [
         "top_conditions": json.dumps([
             {"rank": 1, "condition": "Flu", "plain_explanation": "Karaniwang lagnat."},
         ]),
-        "handoff_summary": json.dumps({"S": "Lagnat.", "O": "—", "A": "Flu.", "P": "Rest."}),
+        "soap_notes": json.dumps({"S": "Lagnat.", "O": "—", "A": "Flu.", "P": "Rest."}),
         "status": "Seen",
         "pdf_path": None,
         "triage_reason": "Di urgent pero kailangan ng konsultasyon.",
@@ -56,7 +56,7 @@ MOCK_PATIENTS = [
         "top_conditions": json.dumps([
             {"rank": 1, "condition": "Heart attack", "plain_explanation": "Posibleng problema sa puso."},
         ]),
-        "handoff_summary": json.dumps({"S": "Nahihirapan huminga.", "O": "—", "A": "Posible heart attack.", "P": "I-refer agad."}),
+        "soap_notes": json.dumps({"S": "Nahihirapan huminga.", "O": "—", "A": "Posible heart attack.", "P": "I-refer agad."}),
         "status": "Referred",
         "pdf_path": None,
         "triage_reason": "Agarang atensyon kailangan.",
