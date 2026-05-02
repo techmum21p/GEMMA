@@ -1,12 +1,13 @@
 import json
 import logging
+import re
 
 from langchain_ollama import OllamaLLM
 
 from app.core.config import settings
 from app.prompts.triage_prompt import (
     TRIAGE_FALLBACK,
-    build_format_prompt,
+    build_gemma_followup_prompt,
     build_medgemma_prompt,
 )
 
@@ -42,134 +43,165 @@ def _get_gemma_llm() -> OllamaLLM:
         _gemma_llm = OllamaLLM(
             model=settings.GEMMA_MODEL,
             base_url=settings.OLLAMA_BASE_URL,
-            temperature=0.1,
-            format="json",
-            num_ctx=8192,
-            num_predict=4096,
+            temperature=0.3,
+            format="json",   # forces valid JSON object output — bare arrays are unreliable
+            num_ctx=4096,
+            num_predict=512,  # enough for a small JSON object with 3 Taglish questions
         )
     return _gemma_llm
 
 
-def _repair_truncated_json(raw: str) -> dict:
+def _parse_medgemma_text(clinical_text: str) -> dict:
     """
-    Handle truncation where the model runs out of tokens mid-string.
-    Finds the last clean comma at depth 1 and closes the object there.
+    Parse MedGemma's structured plain text output deterministically.
+    This replaces the Gemma JSON-format call for structured data extraction,
+    eliminating truncation failures on complex JSON generation.
     """
-    depth = 0
-    in_string = False
-    last_comma_at_depth_1 = -1
-    i = 0
-    while i < len(raw):
-        c = raw[i]
-        if c == '"' and (i == 0 or raw[i - 1] != "\\"):
-            in_string = not in_string
-        elif not in_string:
-            if c in ("{", "["):
-                depth += 1
-            elif c in ("}", "]"):
-                depth -= 1
-            elif c == "," and depth == 1:
-                last_comma_at_depth_1 = i
-        i += 1
+    result: dict = {}
 
-    if last_comma_at_depth_1 > 0:
-        candidate = raw[:last_comma_at_depth_1].rstrip() + "\n}"
-        return json.loads(candidate)
-    raise ValueError("JSON repair found no recovery point")
+    # Triage level
+    m = re.search(r'TRIAGE LEVEL:\s*(RED|YELLOW|GREEN)', clinical_text, re.IGNORECASE)
+    result['triage_level'] = m.group(1).upper() if m else 'YELLOW'
 
+    # Triage reason (text between TRIAGE REASON and TOP CONDITIONS)
+    m = re.search(r'TRIAGE REASON:\s*(.+?)(?=\n\s*\nTOP|\nTOP)', clinical_text, re.DOTALL | re.IGNORECASE)
+    if not m:
+        m = re.search(r'TRIAGE REASON:\s*(.+?)$', clinical_text, re.MULTILINE | re.IGNORECASE)
+    result['triage_reason'] = m.group(1).strip() if m else 'Assessment based on available information.'
 
-def _parse_triage_response(raw: str) -> dict:
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    raw = raw.strip()
+    # Top conditions — format: "1. Condition Name | Plain explanation"
+    conditions: list[dict] = []
+    m = re.search(r'TOP CONDITIONS:\s*\n(.*?)(?=\n\s*\nSOAP|\nSOAP)', clinical_text, re.DOTALL | re.IGNORECASE)
+    if m:
+        for line in m.group(1).strip().split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            line = re.sub(r'^\d+[\.\)]\s*', '', line)  # strip leading "1. "
+            if '|' in line:
+                cond, expl = line.split('|', 1)
+                cond, expl = cond.strip(), expl.strip()
+                if cond and cond.upper() not in ('N/A', 'NA'):
+                    conditions.append({
+                        'rank': len(conditions) + 1,
+                        'condition': cond,
+                        'plain_explanation': expl,
+                    })
+            elif line and line.upper() not in ('N/A', 'NA'):
+                conditions.append({
+                    'rank': len(conditions) + 1,
+                    'condition': line,
+                    'plain_explanation': 'Kailangan ng karagdagang pagsusuri ng doktor.',
+                })
 
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as e:
-        logger.warning(f"JSON parse failed ({e}), attempting truncation repair…")
-        data = _repair_truncated_json(raw)
+    result['top_conditions'] = conditions[:5]  # cap at 5, show only what MedGemma provided
 
-    critical = {"triage_level", "top_conditions", "soap_summary"}
-    missing_critical = critical - data.keys()
-    if missing_critical:
-        raise ValueError(f"Missing critical keys: {missing_critical}")
+    # SOAP note
+    soap: dict = {'S': '', 'O': '', 'A': '', 'P': ''}
+    m = re.search(r'SOAP NOTE:\s*\n(.*)', clinical_text, re.DOTALL | re.IGNORECASE)
+    if m:
+        soap_text = m.group(1)
+        s = re.search(r'\bS:\s*(.+?)(?=\nO:|\Z)', soap_text, re.DOTALL)
+        o = re.search(r'\bO:\s*(.+?)(?=\nA:|\Z)', soap_text, re.DOTALL)
+        a = re.search(r'\bA:\s*(.+?)(?=\nP:|\Z)', soap_text, re.DOTALL)
+        # P: stop at echoed context markers (MedGemma sometimes echoes patient data after the plan)
+        _ECHO_MARKERS = r'Age:|Sex:|Chief Complaint:|Vital Signs:|Follow-up Q&A|Initial Assessment|Blood Pressure:|Temperature:|Heart Rate:|SpO2:'
+        p = re.search(rf'\bP:\s*(.+?)(?=\n\n|\n(?:{_ECHO_MARKERS})|\Z)', soap_text, re.DOTALL)
+        if s: soap['S'] = s.group(1).strip()
+        if o: soap['O'] = o.group(1).strip()
+        if a: soap['A'] = a.group(1).strip()
+        if p: soap['P'] = p.group(1).strip()
+    result['soap_summary'] = soap
+    result['disclaimer'] = _DEFAULT_DISCLAIMER
 
-    data.setdefault("triage_reason", "Assessment based on available information.")
-    data.setdefault("followup_questions", _DEFAULT_FOLLOWUP)
-    data.setdefault("disclaimer", _DEFAULT_DISCLAIMER)
-
-    if data["triage_level"] not in {"RED", "YELLOW", "GREEN"}:
-        data["triage_level"] = "YELLOW"
-
-    raw_conditions = data.get("top_conditions", [])
-    conditions = []
-    for i, item in enumerate(raw_conditions):
-        rank_val = item.get("rank")
-        condition_val = item.get("condition")
-        if isinstance(rank_val, str) and not condition_val:
-            conditions.append({
-                "rank": i + 1,
-                "condition": rank_val,
-                "plain_explanation": item.get("plain_explanation", "Kailangan ng karagdagang pagsusuri ng doktor."),
-            })
-        else:
-            try:
-                rank_int = int(rank_val)
-            except (TypeError, ValueError):
-                rank_int = i + 1
-            conditions.append({
-                "rank": rank_int,
-                "condition": condition_val or "Additional assessment needed",
-                "plain_explanation": item.get("plain_explanation", "Kailangan ng karagdagang pagsusuri ng doktor."),
-            })
-
-    while len(conditions) < 5:
-        rank = len(conditions) + 1
-        conditions.append({
-            "rank": rank,
-            "condition": "Additional assessment needed",
-            "plain_explanation": "Kailangan ng karagdagang pagsusuri ng doktor.",
-        })
-    data["top_conditions"] = conditions[:5]
-
-    return data
+    return result
 
 
-async def run_triage(patient_data: dict) -> dict:
+async def _run_initial_triage(patient_data: dict) -> dict:
     """
-    Two-stage pipeline:
-      Stage 1 — MedGemma: clinical reasoning from structured patient dict → plain text
-      Stage 2 — Gemma: format plain text clinical assessment → strict JSON
+    Stage 1a: MedGemma → clinical plain text (differential Dx, triage level, SOAP)
+    Local parser: extract all structured fields deterministically — no JSON truncation risk
+    Stage 1b: Gemma → ONLY 3 Taglish follow-up questions (JSON array of strings, tiny output)
     """
     medgemma = _get_medgemma_llm()
     gemma = _get_gemma_llm()
-
     medgemma_prompt = build_medgemma_prompt(patient_data)
 
     try:
         clinical_text = await medgemma.ainvoke(medgemma_prompt)
-        logger.info(f"MedGemma clinical analysis ({len(clinical_text)} chars)")
+        logger.info(f"[Stage 1a] MedGemma assessment ({len(clinical_text)} chars)")
+        logger.debug(f"[Stage 1a] MedGemma output:\n{clinical_text}")
 
-        raw_json = await gemma.ainvoke(build_format_prompt(clinical_text))
-        result = _parse_triage_response(raw_json)
-        logger.info(f"Triage succeeded: level={result['triage_level']}, conditions={len(result.get('top_conditions', []))}")
+        result = _parse_medgemma_text(clinical_text)
+        if result['triage_level'] not in {'RED', 'YELLOW', 'GREEN'}:
+            raise ValueError(f"Invalid triage level parsed: {result['triage_level']}")
+
+        # Stage 1b: Gemma generates ONLY a tiny JSON array of 3 questions
+        followup_prompt = build_gemma_followup_prompt(clinical_text, patient_data)
+        raw_qs = await gemma.ainvoke(followup_prompt)
+        logger.info(f"[Stage 1b] Gemma questions raw: {raw_qs[:300]}")
+
+        try:
+            clean = raw_qs.strip()
+            if clean.startswith("```"):
+                clean = clean.split("```")[1].lstrip("json").strip()
+            data = json.loads(clean)
+            # Gemma outputs {"questions": [...]} — also handle bare list as fallback
+            if isinstance(data, dict):
+                raw_list = data.get("questions") or data.get("followup_questions") or []
+            elif isinstance(data, list):
+                raw_list = data
+            else:
+                raise ValueError(f"Unexpected type: {type(data)}")
+            questions = [str(q).strip() for q in raw_list if str(q).strip()][:3]
+            if not questions:
+                raise ValueError("Empty after filtering")
+        except Exception as qe:
+            logger.warning(f"[Stage 1b] Question parse failed ({qe}), using defaults")
+            questions = _DEFAULT_FOLLOWUP
+
+        result['followup_questions'] = questions if questions else _DEFAULT_FOLLOWUP
+        logger.info(f"Initial triage done: level={result['triage_level']}, qs={len(result['followup_questions'])}")
         return result
+
     except Exception as e:
-        logger.warning(f"Triage attempt 1 failed: {e}. Retrying…")
+        logger.error(f"Initial triage failed: {e}. Returning fallback.")
+        return TRIAGE_FALLBACK
+
+
+async def _run_refined_triage(patient_data: dict) -> dict:
+    """
+    Stage 2a: MedGemma → refined clinical plain text (uses Q&A answers)
+    Local parser: extract refined assessment — no Gemma call needed
+    """
+    medgemma = _get_medgemma_llm()
+    medgemma_prompt = build_medgemma_prompt(patient_data)
 
     try:
         clinical_text = await medgemma.ainvoke(medgemma_prompt)
-        format_prompt = (
-            build_format_prompt(clinical_text)
-            + "\n\nCRITICAL: Output ONLY the JSON object. Close all brackets and braces properly."
-        )
-        raw_json = await gemma.ainvoke(format_prompt)
-        result = _parse_triage_response(raw_json)
-        logger.info(f"Triage retry succeeded: level={result['triage_level']}")
+        logger.info(f"[Stage 2a] MedGemma refined assessment ({len(clinical_text)} chars)")
+        logger.debug(f"[Stage 2a] MedGemma output:\n{clinical_text}")
+
+        result = _parse_medgemma_text(clinical_text)
+        if result['triage_level'] not in {'RED', 'YELLOW', 'GREEN'}:
+            raise ValueError(f"Invalid triage level parsed: {result['triage_level']}")
+
+        result['followup_questions'] = []  # Q&A phase is complete
+        logger.info(f"Refined triage done: level={result['triage_level']}")
         return result
+
     except Exception as e:
-        logger.error(f"Triage retry also failed: {e}. Returning fallback.")
+        logger.error(f"Refined triage failed: {e}. Returning fallback.")
         return TRIAGE_FALLBACK
+
+
+async def run_triage(patient_data: dict) -> dict:
+    """
+    Routes to the correct pipeline stage based on whether follow-up answers exist.
+
+    Initial triage  (no followup_answers): Stage 1a MedGemma → local parse → Stage 1b Gemma Qs
+    Refined triage  (has followup_answers): Stage 2a MedGemma → local parse (no Gemma needed)
+    """
+    if patient_data.get("followup_answers"):
+        return await _run_refined_triage(patient_data)
+    return await _run_initial_triage(patient_data)

@@ -303,11 +303,17 @@ function renderTriageResult(result) {
 
   const condList = document.getElementById('conditions-list');
   condList.innerHTML = '';
-  (result.top_conditions || []).forEach(c => {
+  const PLACEHOLDER = 'additional assessment needed';
+  const realConditions = (result.top_conditions || []).filter(
+    c => c.condition.trim().toLowerCase() !== PLACEHOLDER
+  );
+  const heading = document.getElementById('conditions-heading');
+  if (heading) heading.textContent = `Top ${realConditions.length} Possible Condition${realConditions.length !== 1 ? 's' : ''}`;
+  realConditions.forEach((c, i) => {
     const el = document.createElement('div');
     el.className = 'flex gap-3 items-start p-3 bg-light rounded-xl';
     el.innerHTML = `
-      <div class="bg-navy text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">${c.rank}</div>
+      <div class="bg-navy text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">${i + 1}</div>
       <div>
         <div class="font-semibold text-sm text-navy">${c.condition}</div>
         <div class="text-xs text-gray-500 mt-0.5 leading-snug">${c.plain_explanation}</div>
@@ -379,6 +385,7 @@ async function refineWithFollowup() {
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
     const result = await res.json();
+    state.followupQA = answers;  // save Q&A before currentTriageResult is replaced (refined result has followup_questions: [])
     state.currentTriageResult = result;
     stopLoadingAnimation();
     // Go straight to summary — answers have been incorporated, no need to loop
@@ -397,8 +404,22 @@ async function proceedToSummary() {
   const soap = result.soap_summary || {};
   document.getElementById('soap-s').textContent = soap.S || '';
   document.getElementById('soap-o').textContent = soap.O || '';
-  document.getElementById('soap-a').textContent = soap.A || '';
   document.getElementById('soap-p').textContent = soap.P || '';
+
+  // Assessment — conditions as bullets + SOAP A as optional clinical note
+  const PLACEHOLDER = 'additional assessment needed';
+  const realConds = (result.top_conditions || []).filter(
+    c => c.condition.trim().toLowerCase() !== PLACEHOLDER
+  );
+  document.getElementById('soap-a-conditions').innerHTML = realConds.map(c =>
+    `<div class="flex gap-2 items-start text-sm">
+      <span class="text-navy font-bold flex-shrink-0 mt-0.5">•</span>
+      <span><span class="font-semibold text-gray-800">${c.condition}</span><span class="text-gray-500"> — ${c.plain_explanation}</span></span>
+    </div>`
+  ).join('');
+  const noteEl = document.getElementById('soap-a-note');
+  if (soap.A) { noteEl.textContent = `Note: ${soap.A}`; noteEl.classList.remove('hidden'); }
+  else noteEl.classList.add('hidden');
 
   const complaint = readComplaint();
   const name      = document.getElementById('input-name').value.trim() || null;
@@ -413,12 +434,8 @@ async function proceedToSummary() {
   const sexEl     = document.querySelector('input[name="sex"]:checked');
   const sex       = sexEl ? sexEl.value : null;
 
-  const questions = result.followup_questions || [];
-  const followup_qa = {};
-  questions.forEach((q, i) => {
-    const el = document.getElementById(`fq-answer-${i}`);
-    if (el && el.value.trim()) followup_qa[q] = el.value.trim();
-  });
+  // Use Q&A saved before refined result replaced followup_questions with []
+  const followup_qa = state.followupQA || {};
 
   // Age chip
   const chipAge = document.getElementById('chip-age');
@@ -527,6 +544,7 @@ function clearIntakeForm() {
   state.capturedImagePath = null;
   state.currentTriageResult = null;
   state.currentPatientId = null;
+  state.followupQA = null;
   document.getElementById('image-findings-card').classList.add('hidden');
 }
 
@@ -702,15 +720,15 @@ function renderDonutChart(red, yellow, green) {
   const yLen = (yellow / total) * C;
   const rLen = (red    / total) * C;
 
-  // Positive dashoffset shifts the dash start forward along the clockwise path
+  // Negative dashoffset pushes each segment to start after the previous one
   gSeg.setAttribute('stroke-dasharray', `${gLen} ${C}`);
   gSeg.setAttribute('stroke-dashoffset', '0');
 
   ySeg.setAttribute('stroke-dasharray', `${yLen} ${C}`);
-  ySeg.setAttribute('stroke-dashoffset', String(C - gLen));
+  ySeg.setAttribute('stroke-dashoffset', String(-gLen));
 
   rSeg.setAttribute('stroke-dasharray', `${rLen} ${C}`);
-  rSeg.setAttribute('stroke-dashoffset', String(C - gLen - yLen));
+  rSeg.setAttribute('stroke-dashoffset', String(-(gLen + yLen)));
 }
 
 async function sendShiftEmail() {
