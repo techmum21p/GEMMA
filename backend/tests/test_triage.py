@@ -30,6 +30,40 @@ VALID_RESPONSE = json.dumps({
     "disclaimer": "Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor.",
 })
 
+SAMPLE_PATIENT = {
+    "chief_complaint": "Masakit ang ulo at may lagnat.",
+    "age": 35,
+    "sex": "F",
+    "bp": "120/80",
+    "temperature": "38.5",
+    "heart_rate": None,
+    "spo2": None,
+    "image_findings": None,
+    "followup_answers": None,
+    "initial_assessment": None,
+}
+
+CLINICAL_TEXT = """TRIAGE LEVEL: YELLOW
+TRIAGE REASON: Kailangan ng konsultasyon ng doktor.
+
+TOP CONDITIONS:
+1. Flu | Karaniwang lagnat at sipon.
+2. Dengue | Maaaring may dengue kung may pantal.
+3. COVID-19 | Posibleng COVID kung may ubo.
+4. Tonsilitis | Masakit na lalamunan.
+5. UTI | Masakit sa pag-ihi.
+
+FOLLOW-UP QUESTIONS:
+1. Gaano katagal na ang lagnat?
+2. Mayroon bang pantal sa katawan?
+3. May close contact ka ba sa COVID positive?
+
+SOAP NOTE:
+S: Lagnat at sipon mula kahapon.
+O: BP: 120/80. Temp: 38.5°C.
+A: Flu most likely. Consider Dengue and COVID-19.
+P: Triage level YELLOW. Refer to clinic for consultation."""
+
 
 def test_parse_valid_response():
     result = _parse_triage_response(VALID_RESPONSE)
@@ -58,22 +92,37 @@ def test_parse_markdown_wrapped():
 
 @pytest.mark.asyncio
 async def test_run_triage_success():
-    with patch("app.services.triage_service._get_llm") as mock_get_llm:
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke = AsyncMock(return_value=VALID_RESPONSE)
-        mock_get_llm.return_value = mock_llm
+    with (
+        patch("app.services.triage_service._get_medgemma_llm") as mock_medgemma,
+        patch("app.services.triage_service._get_gemma_llm") as mock_gemma,
+    ):
+        mock_medgemma_llm = AsyncMock()
+        mock_medgemma_llm.ainvoke = AsyncMock(return_value=CLINICAL_TEXT)
+        mock_medgemma.return_value = mock_medgemma_llm
 
-        result = await run_triage(chief_complaint="Masakit ang ulo at may lagnat.")
+        mock_gemma_llm = AsyncMock()
+        mock_gemma_llm.ainvoke = AsyncMock(return_value=VALID_RESPONSE)
+        mock_gemma.return_value = mock_gemma_llm
+
+        result = await run_triage(SAMPLE_PATIENT)
         assert result["triage_level"] in {"RED", "YELLOW", "GREEN"}
+        assert len(result["top_conditions"]) == 5
 
 
 @pytest.mark.asyncio
 async def test_run_triage_fallback_on_error():
-    with patch("app.services.triage_service._get_llm") as mock_get_llm:
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke = AsyncMock(side_effect=Exception("Ollama unreachable"))
-        mock_get_llm.return_value = mock_llm
+    with (
+        patch("app.services.triage_service._get_medgemma_llm") as mock_medgemma,
+        patch("app.services.triage_service._get_gemma_llm") as mock_gemma,
+    ):
+        mock_medgemma_llm = AsyncMock()
+        mock_medgemma_llm.ainvoke = AsyncMock(side_effect=Exception("Ollama unreachable"))
+        mock_medgemma.return_value = mock_medgemma_llm
 
-        result = await run_triage(chief_complaint="Test")
+        mock_gemma_llm = AsyncMock()
+        mock_gemma_llm.ainvoke = AsyncMock(side_effect=Exception("Ollama unreachable"))
+        mock_gemma.return_value = mock_gemma_llm
+
+        result = await run_triage(SAMPLE_PATIENT)
         assert result["triage_level"] == "YELLOW"
         assert result == TRIAGE_FALLBACK

@@ -1,6 +1,6 @@
 # GEMMA — Session Notes
 
-_Last updated: 2026-05-01_
+_Last updated: 2026-05-02_
 
 ---
 
@@ -68,6 +68,39 @@ Renamed field and added new field — old `gemma.db` deleted (recreates fresh on
 - `frontend/static/js/app.js` — `proceedToSummary()` payload
 - `tests/test_export.py` — mock patient dicts
 - `scripts/seed_db.py` — seed data
+
+---
+
+## Session 3 — AI Pipeline Refactor (2026-05-02)
+
+### Architecture Decision
+Moved from a single-model text pipeline (Gemma 4 E4B handles everything) to a **two-stage pipeline** using both models for their respective strengths:
+
+- **MedGemma 4B** — Stage 1: clinical reasoning. Receives structured patient dict, outputs plain text clinical assessment (triage level, conditions, SOAP, follow-up questions). Medically trained on EHRs and medical literature — better for clinical reasoning than a general model.
+- **Gemma 4 E4B** (or Gemma 3 27B) — Stage 2: JSON formatting only. Receives MedGemma's plain text and converts it to the required strict JSON schema. Instruction-following-optimized — more reliable for JSON output than MedGemma.
+
+### Structured Input (Dict-First Approach)
+Form fields are now collected as a Python dict deterministically (no LLM involved in parsing user input). The dict is passed directly to MedGemma. This is correct because GEMMA is a form-filling app, not a chatbot — the LLM should only be doing clinical reasoning, not parsing free text.
+
+### Model Swap Support
+Stage 2 model is swappable via `.env` — no code changes needed:
+```bash
+GEMMA_MODEL=gemma4:e4b    # fast, default
+GEMMA_MODEL=gemma3:27b    # high quality, needs ~18GB RAM
+```
+
+### Files Changed
+| File | Change |
+|---|---|
+| `app/prompts/triage_prompt.py` | Split into `MEDGEMMA_SYSTEM_PROMPT` + `GEMMA_FORMAT_SYSTEM_PROMPT`; new `build_patient_context()`, `build_medgemma_prompt()`, `build_format_prompt()` |
+| `app/services/triage_service.py` | Two LLM getters (`_get_medgemma_llm`, `_get_gemma_llm`); `run_triage(patient_data: dict)` with two-stage pipeline |
+| `app/api/routes/triage.py` | `_build_patient_data()` helper builds dict from form fields; both endpoints pass dict to `run_triage` |
+| `tests/test_triage.py` | Updated mocks for both LLMs; `run_triage` called with `SAMPLE_PATIENT` dict |
+| `.env.example` | Added model swap comments |
+
+### Backup Files Created
+- `app/prompts/triage_prompt.bak.py` — original single-model prompt
+- `app/prompts/image_prompt.bak.py` — original image prompt (unchanged, but preserved)
 
 ---
 

@@ -201,8 +201,9 @@ After categorization, patients queue for: general consultations, minor treatment
 
 | Layer | Technology | Rationale |
 |---|---|---|
-| Text AI | Gemma 4 E4B (via Ollama) | Lightweight, offline, Taglish-capable |
-| Image AI | MedGemma 4B (via Ollama) | Medical image understanding |
+| Text AI (Stage 1 — clinical reasoning) | MedGemma 4B (via Ollama) | Medically trained — handles vitals, symptoms, conditions, SOAP |
+| Text AI (Stage 2 — JSON formatting) | Gemma 4 E4B or Gemma 3 27B (via Ollama, configurable via `GEMMA_MODEL` env var) | Reliable instruction-following and JSON output |
+| Image AI | MedGemma 4B (via Ollama) | Medical image understanding (same model as Stage 1) |
 | Orchestration | LangChain (Python) | Familiar stack, prompt chaining |
 | Backend | FastAPI (Python) | Async, lightweight, REST API |
 | Frontend | HTML + Tailwind CSS (PWA) | Mobile-first, installable on Android |
@@ -216,29 +217,55 @@ After categorization, patients queue for: general consultations, minor treatment
 
 ## 8. AI Pipeline Design
 
+### Architecture: Two-Stage Pipeline + Structured Input
+
+Form fields are collected as a structured Python dict (key-value pairs) — no LLM is used for parsing user input. The dict is passed directly to the AI pipeline.
+
 ```
-User Input (text + optional image)
+Form fields (name, age, sex, BP, temp, complaint, etc.)
          ↓
-┌────────────────────────────────────────┐
-│           GEMMA AI Pipeline            │
-│                                        │
-│  [MedGemma 4B] ← image (if provided)  │
-│       ↓ visual findings                │
-│  [Prompt Builder]                      │
-│    + chief complaint                   │
-│    + visual findings                   │
-│    + follow-up answers (if any)        │
-│       ↓                                │
-│  [Gemma 4 E4B]                         │
-│    → Triage Level (R/Y/G)             │
-│    → Top 5 Conditions                  │
-│    → Follow-up Questions               │
-│    → SOAP Handoff Summary              │
-└────────────────────────────────────────┘
+   Python dict (deterministic — no LLM involved)
+         ↓
+┌────────────────────────────────────────────────┐
+│              GEMMA AI Pipeline                 │
+│                                                │
+│  STAGE 0 (optional):                           │
+│  [MedGemma 4B] ← image (if provided)           │
+│       ↓ plain text visual findings             │
+│       → added as key in patient dict           │
+│                                                │
+│  STAGE 1 — Clinical Reasoning:                 │
+│  [MedGemma 4B] ← structured patient dict       │
+│    (chief complaint, vitals, image findings,   │
+│     follow-up answers, demographics)           │
+│       ↓ plain text clinical assessment         │
+│    → triage level + reason                     │
+│    → top 5 conditions (Taglish)                │
+│    → follow-up questions (Taglish)             │
+│    → SOAP note (English, for doctor)           │
+│                                                │
+│  STAGE 2 — JSON Formatting:                    │
+│  [Gemma 4 E4B / Gemma 3 27B] ← clinical text   │
+│       ↓ strict JSON output                     │
+│    → validated against required schema         │
+│    → fallback to YELLOW on failure             │
+└────────────────────────────────────────────────┘
          ↓
    SQLite Patient Log
          ↓
    Display to BHW
+```
+
+### Why Two Stages?
+- **MedGemma** is medically trained (EHRs, medical literature, MIMIC) — best for clinical reasoning, not JSON formatting
+- **Gemma 4 E4B / 27B** is instruction-following-optimized — best for reliable JSON output
+- Separating concerns makes each model do what it's good at
+
+### Model Swap (Stage 2)
+Stage 2 model is configurable via `.env` — no code change needed:
+```bash
+GEMMA_MODEL=gemma4:e4b    # fast, low RAM (default)
+GEMMA_MODEL=gemma3:27b    # high quality, needs ~18GB RAM
 ```
 
 ### Key Prompt Design Principles
@@ -247,6 +274,8 @@ User Input (text + optional image)
 - Always include disclaimer on conditions list
 - Triage output must be deterministic (R/Y/G) — no ambiguous responses
 - System prompt enforces: *"You are a triage support assistant. You do not replace a doctor."*
+- MedGemma prompt uses structured plain-text output format (not JSON) to reduce formatting pressure
+- Gemma format prompt uses minimal instructions — convert only, do not add clinical content
 
 ---
 
