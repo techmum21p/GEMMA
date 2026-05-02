@@ -85,9 +85,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <p style="margin:0; font-size:13px;">{chief_complaint}</p>
 </div>
 
-<!-- Top 5 Possible Conditions -->
+<!-- Top N Possible Conditions -->
 <div class="section">
-  <div class="section-title">Top 5 Possible Conditions</div>
+  <div class="section-title">Top {conditions_count} Possible Conditions</div>
   {conditions_html}
 </div>
 
@@ -163,10 +163,11 @@ def _build_html(patient: dict, bhw_name: str) -> str:
         f'<div style="margin:2px 0;">• {line}</div>' for line in complaint_lines
     ) or complaint_raw
 
-    # Top conditions
+    # Top conditions — filter out padding placeholders
     top_conditions = patient.get("top_conditions", [])
     if isinstance(top_conditions, str):
         top_conditions = json.loads(top_conditions)
+    top_conditions = [c for c in top_conditions if c.get("condition", "").lower() not in ("additional assessment needed", "n/a", "na")]
     conditions_html = ""
     for c in top_conditions:
         conditions_html += (
@@ -224,6 +225,7 @@ def _build_html(patient: dict, bhw_name: str) -> str:
         chief_complaint=chief_complaint_html,
         triage_level=patient.get("triage_level", "YELLOW"),
         triage_reason=patient.get("triage_reason", ""),
+        conditions_count=len(top_conditions),
         conditions_html=conditions_html,
         followup_section=followup_section,
         soap_s=soap.get("S", ""),
@@ -357,6 +359,7 @@ def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str) -> Non
     if isinstance(top_conds, str):
         try:    top_conds = json.loads(top_conds)
         except: top_conds = []
+    top_conds = [c for c in top_conds if c.get("condition", "").lower() not in ("additional assessment needed", "n/a", "na")]
 
     fq_raw = patient.get("followup_qa", "{}")
     try:    fq = json.loads(fq_raw) if isinstance(fq_raw, str) else fq_raw
@@ -482,9 +485,9 @@ def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str) -> Non
         story.append(Paragraph(f"•  {e(line)}", bullet_style))
     story.append(Spacer(1, 0.3 * cm))
 
-    # 5. TOP 5 POSSIBLE CONDITIONS
+    # 5. TOP N POSSIBLE CONDITIONS
     if top_conds:
-        story.append(section("Top 5 Possible Conditions"))
+        story.append(section(f"Top {len(top_conds)} Possible Conditions"))
         story.append(Spacer(1, 0.2 * cm))
         RANK_W = 0.7 * cm
         COND_W = W - RANK_W
