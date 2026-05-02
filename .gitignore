@@ -49,3 +49,9 @@ uvicorn.log
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Project meta / AI tooling
+CLAUDE.md
+GEMMA_PRD.md
+SESSION_NOTES.md
+stitch_prompt.md
