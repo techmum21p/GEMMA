@@ -231,5 +231,5 @@ TRIAGE_FALLBACK = {
         "A": "Unable to assess — AI processing failed. Clinical evaluation required.",
         "P": "Refer to physician for proper assessment. Do not manage without medical evaluation.",
     },
-    "disclaimer": "For BHW reference only. This is not a doctor's diagnosis.",
+    "disclaimer": "For Brgy. Health Worker reference only. This is not a Doctor's diagnosis.",
 }
