@@ -36,23 +36,26 @@ def generate_excel_report(shift: dict, patients: list[dict]) -> str:
         else:
             conditions = top_conditions
 
-        top_condition = conditions[0]["condition"] if conditions else "—"
+        all_conditions = "\n".join(
+            f"{c.get('rank', idx + 1)}. {c['condition']}"
+            for idx, c in enumerate(conditions)
+        ) if conditions else "—"
 
         timestamp = p.get("timestamp", "")
         if hasattr(timestamp, "strftime"):
-            time_str = timestamp.strftime("%H:%M")
+            time_str = timestamp.strftime("%Y-%m-%d %H:%M")
         else:
             time_str = str(timestamp)[:16]
 
         rows.append({
             "#": i,
-            "Oras": time_str,
+            "Petsa at Oras": time_str,
             "Pangalan": p.get("name") or "—",
             "Edad": p.get("age") or "—",
             "Kasarian": p.get("sex") or "—",
             "Chief Complaint": p.get("chief_complaint", ""),
             "Triage Level": p.get("triage_level", ""),
-            "Nangungunang Kondisyon": top_condition,
+            "Lahat ng Kondisyon": all_conditions,
             "Status": p.get("status", "Pending"),
         })
 
@@ -141,9 +144,13 @@ def _style_patient_sheet(ws, df: pd.DataFrame) -> None:
             triage_cell.fill = triage_fills[level]
             triage_cell.font = Font(color="FFFFFF", bold=True)
 
-    col_widths = [4, 8, 20, 6, 8, 35, 14, 30, 12]
+    col_widths = [4, 18, 20, 6, 8, 35, 14, 45, 12]
     for i, width in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = width
+
+    # wrap text in the All Conditions column (col 8)
+    for row_num in range(2, ws.max_row + 1):
+        ws.cell(row=row_num, column=8).alignment = Alignment(wrap_text=True, vertical="top")
 
 
 def _style_summary_sheet(ws) -> None:

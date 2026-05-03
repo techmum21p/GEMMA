@@ -87,7 +87,7 @@ async def export_pdf(patient_id: int, db: AsyncSession = Depends(get_db)):
     bhw_name = shift.bhw_name if shift else "BHW"
 
     patient_dict = _patient_to_dict(patient)
-    pdf_path = generate_pdf(patient_dict, bhw_name)
+    pdf_path = await generate_pdf(patient_dict, bhw_name)
 
     patient.pdf_path = pdf_path
     await db.commit()

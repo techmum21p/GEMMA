@@ -237,18 +237,47 @@ def _build_html(patient: dict, bhw_name: str) -> str:
     )
 
 
-def generate_pdf(patient: dict, bhw_name: str) -> str:
+async def generate_pdf(patient: dict, bhw_name: str) -> str:
+    from app.services.medgemma_enrichment_service import enrich_triage
+
     patient_id = patient.get("id", "unknown")
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     pdf_path = PDF_DIR / f"patient_{patient_id}_{ts}.pdf"
 
-    _generate_with_reportlab(patient, bhw_name, str(pdf_path))
+    # Build triage_output dict from patient record for MedGemma enrichment
+    triage_output = {
+        "triage_level": patient.get("triage_level", ""),
+        "triage_reason": patient.get("triage_reason", ""),
+        "top_conditions": _parse_conditions(patient.get("top_conditions", "[]")),
+        "soap_summary": _parse_soap(patient.get("soap_notes", "{}")),
+    }
+    enrichments = await enrich_triage(triage_output)
+
+    _generate_with_reportlab(patient, bhw_name, str(pdf_path), enrichments)
     logger.info(f"PDF generated: {pdf_path}")
 
     return str(pdf_path)
 
 
-def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str) -> None:
+def _parse_conditions(raw) -> list:
+    if isinstance(raw, list):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return []
+
+
+def _parse_soap(raw) -> dict:
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {"S": "", "O": "", "A": "", "P": ""}
+
+
+def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str, enrichments: list | None = None) -> None:
     import html as _html
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -572,7 +601,61 @@ def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str) -> Non
         story.append(img_tbl)
         story.append(Spacer(1, 0.3 * cm))
 
-    # 9. DISCLAIMER — full-width, yellow box, text wraps properly
+    # 9. CLINICAL NOTES FOR PHYSICIAN (MedGemma enrichment — optional)
+    if enrichments:
+        ENRICH_L = ps("ENRICH_L", fontName="Helvetica-Bold", fontSize=8,
+                      textColor=NAVY, leading=11)
+        ENRICH_V = ps("ENRICH_V", fontSize=8, leading=11)
+        ENRICH_HDR = ps("ENRICH_HDR", fontName="Helvetica-Bold", fontSize=9,
+                        textColor=WHITE, leading=12)
+
+        story.append(KeepTogether([
+            section("Clinical Notes for Physician (MedGemma AI)"),
+            Spacer(1, 0.15 * cm),
+        ]))
+
+        for enr in enrichments:
+            cond_name = e(enr.get("condition", ""))
+            reasoning = e(enr.get("clinical_reasoning", ""))
+            workup = e(enr.get("suggested_workup", ""))
+            flags = e(enr.get("red_flags", ""))
+
+            hdr_tbl = Table([[Paragraph(cond_name, ENRICH_HDR)]], colWidths=[W])
+            hdr_tbl.setStyle(TableStyle([
+                ("BACKGROUND",    (0, 0), (-1, -1), NAVY),
+                ("TOPPADDING",    (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ]))
+
+            EL = 3.2 * cm
+            EV = W - EL
+            detail_rows = []
+            if reasoning:
+                detail_rows.append([Paragraph("Clinical Reasoning", ENRICH_L), Paragraph(reasoning, ENRICH_V)])
+            if workup:
+                detail_rows.append([Paragraph("Suggested Workup", ENRICH_L), Paragraph(workup, ENRICH_V)])
+            if flags:
+                detail_rows.append([Paragraph("Red Flags", ENRICH_L), Paragraph(flags, ENRICH_V)])
+
+            if detail_rows:
+                detail_tbl = Table(detail_rows, colWidths=[EL, EV])
+                detail_tbl.setStyle(TableStyle([
+                    ("BACKGROUND",    (0, 0), (0, -1), LIGHT),
+                    ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+                    ("TOPPADDING",    (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("LEFTPADDING",   (0, 0), (0, -1),  7),
+                    ("LEFTPADDING",   (1, 0), (1, -1),  8),
+                    ("RIGHTPADDING",  (1, 0), (1, -1),  6),
+                    ("GRID",          (0, 0), (-1, -1), 0.5, GRID),
+                ]))
+                story.append(KeepTogether([hdr_tbl, detail_tbl]))
+                story.append(Spacer(1, 0.15 * cm))
+
+        story.append(Spacer(1, 0.2 * cm))
+
+    # 10. DISCLAIMER — full-width, yellow box, text wraps properly
     disc_tbl = Table([[Paragraph(
         "[!]  Para sa kaalaman ng BHW at doktor lamang. "
         "Hindi ito opisyal na medikal na rekord. "
