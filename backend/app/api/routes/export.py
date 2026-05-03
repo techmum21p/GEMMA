@@ -54,6 +54,25 @@ def _shift_to_dict(shift: Shift) -> dict:
     }
 
 
+@router.get("/enrichment-status/{patient_id}")
+async def enrichment_status(patient_id: int, db: AsyncSession = Depends(get_db)):
+    """Lightweight poll endpoint — tells the frontend when MedGemma enrichment is ready."""
+    from app.services.enrichment_cache import is_done
+    patient = await db.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    raw = patient.top_conditions
+    if isinstance(raw, str):
+        try:
+            top_conditions = json.loads(raw)
+        except Exception:
+            top_conditions = []
+    else:
+        top_conditions = raw or []
+    triage_output = {"top_conditions": top_conditions}
+    return {"ready": is_done(triage_output), "patient_id": patient_id}
+
+
 @router.get("/excel/{shift_id}")
 async def export_excel(shift_id: str, db: AsyncSession = Depends(get_db)):
     shift = await db.get(Shift, shift_id)

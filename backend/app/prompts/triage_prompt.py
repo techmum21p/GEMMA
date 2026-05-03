@@ -54,10 +54,11 @@ DIFFERENTIAL DIAGNOSIS RULES:
 
 LANGUAGE:
 - triage_reason and plain_explanation: simple Taglish (Filipino-English mix) — clear for a BHW with no medical degree
+- followup_questions: exactly 3 BHW-friendly Taglish questions targeting genuine clinical information gaps that differentiate the top conditions — conversational tone, never ask about vitals or symptoms already stated; output [] if follow-up Q&A answers are already provided in the patient data
 - SOAP note: English — for the receiving doctor
 - SOAP S: patient's own verbal report only — do NOT include vitals or exam findings here
 - SOAP O: measurable findings only — vitals with exact values, physical observations
-- SOAP A: top 2-3 diagnoses with brief clinical reasoning for each
+- SOAP A: synthesized clinical assessment for the receiving doctor — NOT a list of the top_conditions. State the single most likely working diagnosis and 1-2 key differentials with the specific evidence that supports or differentiates each. Format: "Working Dx: [condition] — [specific evidence]. R/O [differential] — [differentiating factor]." Must integrate vitals, symptoms, and Q&A answers. No Taglish. No repetition of plain_explanation text.
 - SOAP P: triage level, specific BHW action, and exact red flags to watch for
 
 FEW-SHOT EXAMPLES — study these carefully before responding:
@@ -87,6 +88,13 @@ OUTPUT — return ONLY valid JSON matching this exact schema, no markdown, no ex
 {
   "triage_level": "RED | YELLOW | GREEN",
   "triage_reason": "Short Taglish explanation of why this triage level was assigned",
+  "soap_summary": {
+    "S": "Patient reports ...",
+    "O": "BP: X/X mmHg | Temp: X C | HR: X bpm | SpO2: X%",
+    "A": "Working Dx: Acute Ischemic Stroke — sudden bilateral deficits + posterior headache + age 86 in 2h window. R/O Hypertensive Emergency — BP 160/100 with end-organ signs; R/O Vertebrobasilar TIA — must exclude with imaging.",
+    "P": "[Triage level]. [Specific BHW action]. Watch for: [specific red flags by name]."
+  },
+  "followup_questions": ["Taglish question 1 targeting top condition?", "Taglish question 2?", "Taglish question 3?"],
   "top_conditions": [
     {"rank": 1, "condition": "Exact Diagnosis Name", "plain_explanation": "Taglish explanation of what this disease is and why it fits"},
     {"rank": 2, "condition": "Exact Diagnosis Name", "plain_explanation": "Taglish explanation"},
@@ -94,13 +102,6 @@ OUTPUT — return ONLY valid JSON matching this exact schema, no markdown, no ex
     {"rank": 4, "condition": "Exact Diagnosis Name", "plain_explanation": "Taglish explanation"},
     {"rank": 5, "condition": "Exact Diagnosis Name", "plain_explanation": "Taglish explanation"}
   ],
-  "followup_questions": [],
-  "soap_summary": {
-    "S": "Patient reports ...",
-    "O": "BP: X/X mmHg | Temp: X C | HR: X bpm | SpO2: X%",
-    "A": "1. [Most likely Dx] — brief clinical reasoning. 2. [Second Dx] — reasoning.",
-    "P": "[Triage level]. [Specific BHW action]. Watch for: [specific red flags by name]."
-  },
   "disclaimer": "For BHW reference only. This is not a doctor's diagnosis."
 }"""
 
@@ -124,28 +125,28 @@ QUESTION RULES:
 Output ONLY the JSON object. No other text."""
 
 
-# ── PDF Enrichment: MedGemma — clinical consult notes for doctor ──────────────
-MEDGEMMA_ENRICHMENT_SYSTEM_PROMPT = """You are a clinical documentation assistant. A Barangay Health Worker in the Philippines used an AI triage system (GEMMA) to assess a patient. Your task is to enrich each listed condition with clinical detail appropriate for the receiving physician — not for the patient or BHW.
+# ── PDF Enrichment: MedGemma — concise clinical notes ────────────────────────
+MEDGEMMA_ENRICHMENT_SYSTEM_PROMPT = """You are a clinical documentation assistant for a community health triage system in the Philippines. A Barangay Health Worker (BHW) triaged a patient using GEMMA AI. Add brief, actionable clinical notes per condition for the BHW's handoff reference and the receiving physician.
 
 OUTPUT — return ONLY valid JSON in this exact format, no other text:
 {
   "enrichments": [
     {
       "condition": "Exact condition name from triage output",
-      "clinical_reasoning": "Clinical justification linking symptoms, vitals, demographics, and image findings to this diagnosis. Use standard medical terminology.",
-      "suggested_workup": "Specific diagnostic tests to confirm or rule out this condition — labs, imaging, procedures with clinical rationale",
-      "red_flags": "Specific clinical signs that would urgently upgrade severity or require immediate intervention"
+      "clinical_summary": "ONE sentence: key clinical justification linking symptoms and vitals to this diagnosis.",
+      "priority_workup": "Top 2-3 specific tests only, comma-separated (e.g. Non-contrast CT head, serum tryptase, CBC).",
+      "red_flags": "2-3 specific warning signs requiring immediate escalation, comma-separated (e.g. stridor, SpO2 < 88%, altered consciousness)."
     }
   ]
 }
 
 RULES:
-- Provide enrichment for EACH condition in the triage output (up to 5)
-- Write for a physician — standard medical terminology is appropriate here
-- suggested_workup must be specific and actionable (e.g., "CBC with differential, serum lactate, blood cultures x2 before antibiotics" not just "labs")
-- red_flags must name exact signs (e.g., "progressive focal weakness, dysarthria, or GCS < 14 -> immediate transfer to tertiary hospital")
-- Do NOT include triage level or BHW instructions — focus on clinical detail for the physician only
-- Consider the patient's age, sex, vitals, and all reported symptoms when reasoning"""
+- Enrich EACH condition listed (up to 5)
+- clinical_summary: ONE sentence max. Do NOT repeat the chief complaint word-for-word.
+- priority_workup: 2-3 specific test names, comma-separated — NEVER write "None". For functional/psychiatric conditions, name the appropriate evaluation (e.g. "Psychiatric evaluation, PHQ-9 screen").
+- red_flags: 2-3 specific warning signs, comma-separated — NEVER write "None". For psychiatric conditions, name specific escalation signs (e.g. "suicidal ideation, dissociation, inability to self-calm").
+- Never write "This condition is not specified" — always give the best clinical answer based on available data
+- Consider the patient's age, sex, vitals, and all reported symptoms"""
 
 
 def build_patient_context(patient_data: dict) -> str:

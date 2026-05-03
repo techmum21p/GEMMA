@@ -34,15 +34,16 @@ function showScreen(screenId, addToHistory = true) {
   const subtitle = document.getElementById('header-subtitle');
 
   const subtitles = {
-    'screen-intake':   'New Patient',
-    'screen-result':   'Triage Result',
-    'screen-summary':  'Handoff Summary',
-    'screen-log':      'Patient Log',
-    'screen-endshift': 'End Shift',
-    'screen-loading':  'Analyzing...',
+    'screen-intake':      'New Patient',
+    'screen-result':      'Triage Result',
+    'screen-summary':     'Handoff Summary',
+    'screen-log':         'Patient Log',
+    'screen-endshift':    'End Shift',
+    'screen-loading':     'Analyzing...',
+    'screen-pdf-viewer':  'Patient PDF',
   };
 
-  if (screenId === 'screen-home') {
+  if (screenId === 'screen-home' || screenId === 'screen-pdf-viewer') {
     header.classList.add('hidden');
     bottomNav.classList.add('hidden');
   } else {
@@ -303,10 +304,12 @@ function renderTriageResult(result) {
 
   const condList = document.getElementById('conditions-list');
   condList.innerHTML = '';
-  const PLACEHOLDER = 'additional assessment needed';
-  const realConditions = (result.top_conditions || []).filter(
-    c => c.condition.trim().toLowerCase() !== PLACEHOLDER
-  );
+  const _COND_SKIP = new Set(['additional assessment needed', 'n/a', 'na', 'unable to assess']);
+  const _COND_FALLBACK = /^condition\s*\d+$/i;
+  const realConditions = (result.top_conditions || []).filter(c => {
+    const name = (c.condition || '').trim();
+    return name && !_COND_SKIP.has(name.toLowerCase()) && !_COND_FALLBACK.test(name);
+  });
   const heading = document.getElementById('conditions-heading');
   if (heading) heading.textContent = `Top ${realConditions.length} Possible Condition${realConditions.length !== 1 ? 's' : ''}`;
   realConditions.forEach((c, i) => {
@@ -407,10 +410,12 @@ async function proceedToSummary() {
   document.getElementById('soap-p').textContent = soap.P || '';
 
   // Assessment — conditions as bullets + SOAP A as optional clinical note
-  const PLACEHOLDER = 'additional assessment needed';
-  const realConds = (result.top_conditions || []).filter(
-    c => c.condition.trim().toLowerCase() !== PLACEHOLDER
-  );
+  const _SUMMARY_SKIP = new Set(['additional assessment needed', 'n/a', 'na', 'unable to assess']);
+  const _SUMMARY_FALLBACK = /^condition\s*\d+$/i;
+  const realConds = (result.top_conditions || []).filter(c => {
+    const name = (c.condition || '').trim();
+    return name && !_SUMMARY_SKIP.has(name.toLowerCase()) && !_SUMMARY_FALLBACK.test(name);
+  });
   document.getElementById('soap-a-conditions').innerHTML = realConds.map(c =>
     `<div class="flex gap-2 items-start text-sm">
       <span class="text-navy font-bold flex-shrink-0 mt-0.5">•</span>
@@ -504,27 +509,106 @@ async function proceedToSummary() {
       `Encounter ID: #GEM-${String(patient.id).padStart(4, '0')}`;
 
     showScreen('screen-summary');
+    startEnrichmentPolling(patient.id);
   } catch (err) {
     showError(`Could not save patient: ${err.message}`);
   }
 }
 
+function startEnrichmentPolling(patientId) {
+  const badge = document.getElementById('enrichment-status');
+  if (!badge) return;
+
+  badge.className = 'text-xs text-center px-2 py-1 rounded-lg bg-amber-50 text-amber-700';
+  badge.textContent = 'Preparing clinical notes for PDF...';
+  badge.classList.remove('hidden');
+
+  let attempts = 0;
+  const MAX_ATTEMPTS = 40; // 40 × 3s = 2 min max
+
+  const poll = setInterval(async () => {
+    attempts++;
+    try {
+      const res = await fetch(`/api/export/enrichment-status/${patientId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ready) {
+          clearInterval(poll);
+          badge.className = 'text-xs text-center px-2 py-1 rounded-lg bg-green-50 text-green-700';
+          badge.textContent = 'Clinical notes ready — PDF will generate instantly';
+          setTimeout(() => badge.classList.add('hidden'), 4000);
+        }
+      }
+    } catch (_) { /* network blip — keep polling */ }
+
+    if (attempts >= MAX_ATTEMPTS) {
+      clearInterval(poll);
+      badge.classList.add('hidden');
+    }
+  }, 3000);
+}
+
+let _pdfBlobUrl = null;
+
 async function generatePDF() {
   if (!state.currentPatientId) { showError('No patient saved yet.'); return; }
 
   const btn = document.getElementById('btn-generate-pdf');
-  btn.textContent = '⏳ Generating PDF...';
+  btn.textContent = '⏳ Generating...';
   btn.disabled = true;
 
   try {
-    window.open(`/api/export/pdf/${state.currentPatientId}`, '_blank');
-    showToast('PDF generated! Opening in new tab...');
+    const res = await fetch(`/api/export/pdf/${state.currentPatientId}`);
+    if (!res.ok) throw new Error(await res.text());
+
+    const blob = await res.blob();
+    if (_pdfBlobUrl) URL.revokeObjectURL(_pdfBlobUrl);
+    _pdfBlobUrl = URL.createObjectURL(blob);
+
+    _openPDFViewer(_pdfBlobUrl);
   } catch (err) {
     showError(`Could not generate PDF: ${err.message}`);
   } finally {
-    btn.textContent = '📄 Generate PDF Handoff';
+    btn.textContent = '↓ Generate PDF Handoff';
     btn.disabled = false;
   }
+}
+
+function _openPDFViewer(blobUrl) {
+  const encounterId = document.getElementById('summary-encounter-id')?.textContent || '';
+  document.getElementById('pdf-viewer-title').textContent = encounterId;
+
+  // Reset viewer state
+  const iframe  = document.getElementById('pdf-iframe');
+  const loading = document.getElementById('pdf-viewer-loading');
+  const fallback = document.getElementById('pdf-viewer-fallback');
+  iframe.classList.add('hidden');
+  loading.classList.remove('hidden');
+  fallback.classList.add('hidden');
+  iframe.src = '';
+
+  showScreen('screen-pdf-viewer');
+
+  // Load PDF — give the iframe 5 seconds to show content before showing fallback
+  let loaded = false;
+  iframe.onload = () => {
+    if (loaded) return;
+    loaded = true;
+    loading.classList.add('hidden');
+    iframe.classList.remove('hidden');
+  };
+  setTimeout(() => {
+    if (loaded) return;
+    loading.classList.add('hidden');
+    fallback.classList.remove('hidden');
+  }, 5000);
+
+  iframe.src = blobUrl;
+}
+
+function closePDFViewer() {
+  // Go back to summary; don't add pdf-viewer to history again
+  showScreen('screen-summary', false);
 }
 
 function saveAndNewPatient() {

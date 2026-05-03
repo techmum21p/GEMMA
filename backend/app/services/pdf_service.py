@@ -1,7 +1,10 @@
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
+
+_PLACEHOLDER_COND = re.compile(r'^condition\s*\d+$', re.IGNORECASE)
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +170,12 @@ def _build_html(patient: dict, bhw_name: str) -> str:
     top_conditions = patient.get("top_conditions", [])
     if isinstance(top_conditions, str):
         top_conditions = json.loads(top_conditions)
-    top_conditions = [c for c in top_conditions if c.get("condition", "").lower() not in ("additional assessment needed", "n/a", "na")]
+    _SKIP = {"additional assessment needed", "n/a", "na", "unable to assess"}
+    top_conditions = [
+        c for c in top_conditions
+        if c.get("condition", "").lower() not in _SKIP
+        and not _PLACEHOLDER_COND.match(c.get("condition", "").strip())
+    ]
     conditions_html = ""
     for c in top_conditions:
         conditions_html += (
@@ -238,8 +246,6 @@ def _build_html(patient: dict, bhw_name: str) -> str:
 
 
 async def generate_pdf(patient: dict, bhw_name: str) -> str:
-    from app.services.medgemma_enrichment_service import enrich_triage
-
     patient_id = patient.get("id", "unknown")
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     pdf_path = PDF_DIR / f"patient_{patient_id}_{ts}.pdf"
@@ -251,7 +257,8 @@ async def generate_pdf(patient: dict, bhw_name: str) -> str:
         "top_conditions": _parse_conditions(patient.get("top_conditions", "[]")),
         "soap_summary": _parse_soap(patient.get("soap_notes", "{}")),
     }
-    enrichments = await enrich_triage(triage_output)
+    from app.services.enrichment_cache import get_or_fetch
+    enrichments = await get_or_fetch(triage_output)
 
     _generate_with_reportlab(patient, bhw_name, str(pdf_path), enrichments)
     logger.info(f"PDF generated: {pdf_path}")
@@ -388,7 +395,12 @@ def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str, enrich
     if isinstance(top_conds, str):
         try:    top_conds = json.loads(top_conds)
         except: top_conds = []
-    top_conds = [c for c in top_conds if c.get("condition", "").lower() not in ("additional assessment needed", "n/a", "na")]
+    _SKIP_CONDS = {"additional assessment needed", "n/a", "na", "unable to assess"}
+    top_conds = [
+        c for c in top_conds
+        if c.get("condition", "").lower() not in _SKIP_CONDS
+        and not _PLACEHOLDER_COND.match(c.get("condition", "").strip())
+    ]
 
     fq_raw = patient.get("followup_qa", "{}")
     try:    fq = json.loads(fq_raw) if isinstance(fq_raw, str) else fq_raw
@@ -601,42 +613,57 @@ def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str, enrich
         story.append(img_tbl)
         story.append(Spacer(1, 0.3 * cm))
 
-    # 9. CLINICAL NOTES FOR PHYSICIAN (MedGemma enrichment — optional)
-    if enrichments:
-        ENRICH_L = ps("ENRICH_L", fontName="Helvetica-Bold", fontSize=8,
-                      textColor=NAVY, leading=11)
-        ENRICH_V = ps("ENRICH_V", fontSize=8, leading=11)
+    # 9. ADDITIONAL CLINICAL NOTES (MedGemma — compact, one row per condition)
+    valid_enrichments = [
+        enr for enr in (enrichments or [])
+        if enr.get("condition")
+        and not _PLACEHOLDER_COND.match(enr.get("condition", "").strip())
+        and enr.get("condition", "").lower() not in _SKIP_CONDS
+    ]
+    if valid_enrichments:
+        ENRICH_LBL = ps("ENRICH_LBL", fontName="Helvetica-Bold", fontSize=7.5,
+                        textColor=NAVY, leading=11)
+        ENRICH_VAL = ps("ENRICH_VAL", fontSize=8, leading=12)
         ENRICH_HDR = ps("ENRICH_HDR", fontName="Helvetica-Bold", fontSize=9,
                         textColor=WHITE, leading=12)
+        DANGER_PS  = ps("DANGER_PS",  fontSize=8, textColor=colors.HexColor("#C0392B"),
+                        leading=12)
 
         story.append(KeepTogether([
-            section("Clinical Notes for Physician (MedGemma AI)"),
+            section("Additional Clinical Notes (MedGemma AI)"),
             Spacer(1, 0.15 * cm),
         ]))
 
-        for enr in enrichments:
+        EL = 3.0 * cm
+        EV = W - EL
+
+        _NONE_VALS = {'none', 'n/a', 'na', 'not applicable', 'not available', '-', '—', 'nil'}
+
+        def _enrich_val(raw: str) -> str:
+            v = e(raw or "").strip()
+            return "" if v.lower() in _NONE_VALS else v
+
+        for enr in valid_enrichments:
             cond_name = e(enr.get("condition", ""))
-            reasoning = e(enr.get("clinical_reasoning", ""))
-            workup = e(enr.get("suggested_workup", ""))
-            flags = e(enr.get("red_flags", ""))
+            summary = _enrich_val(enr.get("clinical_summary") or enr.get("clinical_reasoning", ""))
+            workup  = _enrich_val(enr.get("priority_workup")  or enr.get("suggested_workup", ""))
+            flags   = _enrich_val(enr.get("red_flags", ""))
 
             hdr_tbl = Table([[Paragraph(cond_name, ENRICH_HDR)]], colWidths=[W])
             hdr_tbl.setStyle(TableStyle([
                 ("BACKGROUND",    (0, 0), (-1, -1), NAVY),
-                ("TOPPADDING",    (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING",    (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
                 ("LEFTPADDING",   (0, 0), (-1, -1), 8),
             ]))
 
-            EL = 3.2 * cm
-            EV = W - EL
             detail_rows = []
-            if reasoning:
-                detail_rows.append([Paragraph("Clinical Reasoning", ENRICH_L), Paragraph(reasoning, ENRICH_V)])
+            if summary:
+                detail_rows.append([Paragraph("Summary", ENRICH_LBL), Paragraph(summary, ENRICH_VAL)])
             if workup:
-                detail_rows.append([Paragraph("Suggested Workup", ENRICH_L), Paragraph(workup, ENRICH_V)])
+                detail_rows.append([Paragraph("Key Tests", ENRICH_LBL), Paragraph(workup, ENRICH_VAL)])
             if flags:
-                detail_rows.append([Paragraph("Red Flags", ENRICH_L), Paragraph(flags, ENRICH_V)])
+                detail_rows.append([Paragraph("Watch For", ENRICH_LBL), Paragraph(flags, DANGER_PS)])
 
             if detail_rows:
                 detail_tbl = Table(detail_rows, colWidths=[EL, EV])
@@ -651,7 +678,7 @@ def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str, enrich
                     ("GRID",          (0, 0), (-1, -1), 0.5, GRID),
                 ]))
                 story.append(KeepTogether([hdr_tbl, detail_tbl]))
-                story.append(Spacer(1, 0.15 * cm))
+                story.append(Spacer(1, 0.1 * cm))
 
         story.append(Spacer(1, 0.2 * cm))
 

@@ -421,6 +421,7 @@
         class="w-full bg-navy text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform flex items-center justify-center gap-2">
         ↓ Generate PDF Handoff
       </button>
+      <div id="enrichment-status" class="hidden text-xs text-center px-2 py-1 rounded-lg"></div>
       <button onclick="saveAndNewPatient()"
         class="w-full bg-forest text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform">
         ➕ Next Patient
@@ -588,6 +589,52 @@
     <span class="text-xs font-semibold">End Shift</span>
   </button>
 </nav>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PDF VIEWER SCREEN                                               -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="screen-pdf-viewer" data-screen class="hidden flex-col fixed inset-0 z-40 bg-gray-100">
+  <!-- Viewer header -->
+  <div class="bg-navy text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
+    <div class="min-w-0">
+      <div class="font-display font-bold text-sm leading-tight">Patient Handoff PDF</div>
+      <div id="pdf-viewer-title" class="text-xs opacity-70 truncate"></div>
+    </div>
+    <div class="flex gap-2 flex-shrink-0 ml-3">
+      <button onclick="closePDFViewer()"
+        class="bg-white/20 text-white font-semibold px-3 py-2 rounded-xl text-sm active:opacity-75 transition-opacity">
+        ✕ Close
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="pdf-viewer-loading" class="flex-1 flex items-center justify-center">
+    <div class="text-center text-gray-500 px-6">
+      <div class="text-4xl mb-3">📄</div>
+      <div class="font-semibold text-navy">Loading PDF...</div>
+      <div class="text-sm mt-1 text-gray-400">Please wait a moment</div>
+    </div>
+  </div>
+
+  <!-- PDF iframe (shown when loaded) -->
+  <iframe id="pdf-iframe" class="hidden flex-1 w-full border-0" title="Patient Handoff PDF"></iframe>
+
+  <!-- Fallback for devices where inline PDF doesn't render -->
+  <div id="pdf-viewer-fallback" class="hidden flex-1 flex items-center justify-center p-6">
+    <div class="text-center w-full max-w-xs">
+      <div class="text-5xl mb-4">📄</div>
+      <div class="font-display font-bold text-xl text-navy mb-2">PDF Saved</div>
+      <p class="text-gray-500 text-sm mb-6 leading-relaxed">
+        The handoff document has been saved to the <strong>exports/pdfs/</strong> folder.
+      </p>
+      <button onclick="closePDFViewer()"
+        class="w-full bg-navy text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform">
+        Back to Summary
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- ════════════════════════════════════════════════════════════════ -->
 <!-- ERROR MODAL                                                     -->
