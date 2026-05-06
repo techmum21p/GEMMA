@@ -40,10 +40,12 @@ OTHER:
 ESCALATION RULE: If Stroke, TIA, MI, Sepsis, or Anaphylaxis appears in your top conditions AND symptoms support it — you MUST assign RED. Assigning YELLOW to a probable stroke is a patient safety failure.
 
 IMAGE FINDINGS RULES (when image_findings is provided):
-- Specific, detailed findings (e.g., "erythematous wound with purulent discharge, swelling, warmth") -> weight heavily, factor directly into differential
-- Vague findings (e.g., "skin abnormality noted", "lesion present") -> treat as weak supporting evidence; state this explicitly in your reasoning
-- Findings that contradict reported symptoms -> note the inconsistency, prioritize the patient's verbal report
-- Always explicitly state how you weighted the image findings before arriving at your differential
+- A category tag and matching clinical context block are injected below the image findings — use them to guide your differential for that specific domain
+- Specific, detailed findings → weight heavily, factor directly into differential
+- Vague findings → treat as weak supporting evidence; state this explicitly in your reasoning
+- When chief complaint describes a specific mechanism or symptom AND image confirms a consistent finding → treat as HIGH-SPECIFICITY combined evidence; do not default to generic conditions
+- Findings contradicting reported symptoms → note the inconsistency, prioritize the patient's verbal report
+- Always explicitly state how you weighted image findings before arriving at your differential
 
 DIFFERENTIAL DIAGNOSIS RULES:
 - TOP CONDITIONS must be actual medical diagnoses — NOT symptoms, NOT chief complaints
@@ -104,6 +106,113 @@ OUTPUT — return ONLY valid JSON matching this exact schema, no markdown, no ex
   ],
   "disclaimer": "For BHW reference only. This is not a doctor's diagnosis."
 }"""
+
+
+# ── Dynamic image clinical context — injected per-case, keeps system prompt lean ─
+_IMAGE_CATEGORIES = {
+    "WOUND", "SKIN", "EYE", "ORAL", "MUSCULOSKELETAL", "RESPIRATORY", "ABDOMINAL", "OTHER"
+}
+
+IMAGE_CLINICAL_CONTEXT = {
+    "WOUND": (
+        "Wound/trauma case confirmed by image.\n"
+        "Key focus: wound type (puncture/laceration/burn/bite/abrasion), infection risk, tetanus status, "
+        "foreign body retention, neurovascular integrity of distal limb.\n"
+        "Common barangay differentials: Tetanus-prone Wound, Acute Wound Infection, Cellulitis, "
+        "Retained Foreign Body, Soft Tissue Injury, Osteomyelitis (delayed risk), Septic Arthritis (if near joint).\n"
+        "Example — 'stepped on a nail' + plantar puncture image → top: Tetanus-prone Puncture Wound, "
+        "Acute Wound Infection/Cellulitis, Retained Foreign Body, Plantar Soft Tissue Injury, Osteomyelitis.\n"
+        "RED FLAG: spreading erythema with fever, lymphangitic streaking, signs of septic shock → refer immediately."
+    ),
+    "SKIN": (
+        "Dermatology case confirmed by image.\n"
+        "Key focus: lesion morphology (macule/papule/vesicle/pustule/plaque/bulla), distribution "
+        "(localized/dermatomal/symmetrical/sun-exposed), infectious vs inflammatory vs allergic, contagion risk.\n"
+        "Common barangay differentials: Scabies, Impetigo, Tinea (ringworm/athlete's foot/pityriasis versicolor), "
+        "Atopic Dermatitis, Contact Dermatitis, Varicella (chickenpox), Herpes Zoster (shingles), "
+        "Urticaria (hives), Drug Eruption, Psoriasis, Cellulitis.\n"
+        "Example — unilateral dermatomal vesicular rash + burning pain + elderly → top: Herpes Zoster, "
+        "Contact Dermatitis, Varicella, Bullous Impetigo, Drug Eruption.\n"
+        "RED FLAG: rapidly spreading skin redness + fever + skin peeling → possible Stevens-Johnson or Necrotizing Fasciitis → refer."
+    ),
+    "EYE": (
+        "Ocular case confirmed by image.\n"
+        "Key focus: vision threat vs non-urgent, unilateral vs bilateral, discharge type "
+        "(watery=viral/allergic; mucopurulent=bacterial), corneal involvement, periorbital spread.\n"
+        "Common barangay differentials: Bacterial Conjunctivitis, Viral Conjunctivitis, Allergic Conjunctivitis, "
+        "Corneal Abrasion, Foreign Body, Hordeolum (stye), Chalazion, Preseptal Cellulitis.\n"
+        "RED FLAG: corneal cloudiness/haziness, severe eye pain, sudden vision loss, or periorbital spreading "
+        "redness/swelling → possible orbital cellulitis or corneal ulcer → refer immediately."
+    ),
+    "ORAL": (
+        "Oral/throat case confirmed by image.\n"
+        "Key focus: tonsillar exudate, peritonsillar asymmetry (abscess risk), uvula deviation, "
+        "trismus, floor-of-mouth swelling (Ludwig's angina risk), oral lesions.\n"
+        "Common barangay differentials: Streptococcal Pharyngitis, Viral Tonsillitis, Peritonsillar Abscess, "
+        "Oral Candidiasis (thrush), Aphthous Ulcer, Herpangina, Dental Abscess, Stomatitis.\n"
+        "RED FLAG: drooling + muffled 'hot potato' voice + trismus + uvula deviation → peritonsillar abscess "
+        "or Ludwig's angina → refer immediately (airway at risk)."
+    ),
+    "MUSCULOSKELETAL": (
+        "Musculoskeletal case confirmed by image.\n"
+        "Key focus: deformity (angulation/shortening suggests fracture vs dislocation), neurovascular "
+        "distal status (pulse/sensation/color), open wound over joint (septic arthritis risk), "
+        "joint vs bone vs soft tissue origin.\n"
+        "Common barangay differentials: Fracture, Sprain/Ligament Tear, Contusion/Hematoma, "
+        "Joint Effusion, Acute Gout, Septic Arthritis, Cellulitis over joint.\n"
+        "RED FLAG: visible bone, open fracture, neurovascular compromise (cold/pale/pulseless distal limb), "
+        "or rapidly expanding hematoma → refer immediately."
+    ),
+    "RESPIRATORY": (
+        "Visible respiratory signs in image.\n"
+        "Key focus: cyanosis (lip/nail/fingertip color), chest retractions, accessory muscle use, "
+        "chest asymmetry, visible distress posture (tripoding).\n"
+        "Any visible cyanosis = HIGH suspicion for SpO2 < 92% → likely RED regardless of other findings.\n"
+        "Common barangay differentials: Bronchial Asthma (exacerbation), Pneumonia, COPD Exacerbation, "
+        "Anaphylaxis, Pleural Effusion, Pulmonary Edema.\n"
+        "RED FLAG: cyanosis, severe accessory muscle use, inability to speak in full sentences → RED."
+    ),
+    "ABDOMINAL": (
+        "Abdominal signs visible in image.\n"
+        "Key focus: distension pattern (generalized/localized), visible mass or hernia "
+        "(reducible vs irreducible), skin color changes (jaundice/bruising), surgical wound condition.\n"
+        "Common barangay differentials: Intestinal Obstruction, Ascites (liver disease/heart failure), "
+        "Incarcerated Hernia, Post-surgical Wound Infection, Acute Appendicitis, Liver Disease.\n"
+        "RED FLAG: rigid board-like distension + fever + guarding posture → peritonitis → refer immediately."
+    ),
+    "OTHER": (
+        "Image provided but category unclear or not identifiable as a specific medical domain.\n"
+        "Weight image findings by specificity against the chief complaint. "
+        "If findings are vague, prioritize chief complaint for the differential."
+    ),
+}
+
+
+import re as _re
+
+
+def _extract_image_category(image_findings: str) -> str:
+    """Parse MedGemma's Category: tag; fall back to keyword scan if tag is missing."""
+    m = _re.match(r"Category:\s*(\w+)", image_findings.strip(), _re.IGNORECASE)
+    if m and m.group(1).upper() in _IMAGE_CATEGORIES:
+        return m.group(1).upper()
+    # Keyword fallback — handles cases where MedGemma skips the tag
+    text = image_findings.upper()
+    if any(w in text for w in ["PUNCTURE", "LACERATION", "WOUND", "BURN", "ABRASION", "BITE", "CUT", "BLEEDING"]):
+        return "WOUND"
+    if any(w in text for w in ["RASH", "VESICLE", "PAPULE", "MACULE", "LESION", "BLISTER", "SCALING", "PLAQUE", "PUSTULE"]):
+        return "SKIN"
+    if any(w in text for w in ["EYE", "CONJUNCTIV", "CORNEA", "EYELID", "OCULAR", "SCLERA"]):
+        return "EYE"
+    if any(w in text for w in ["TONSIL", "THROAT", "PHARYNX", "ORAL", "TONGUE", "GUM", "TOOTH", "PALATE"]):
+        return "ORAL"
+    if any(w in text for w in ["DEFORMITY", "SWELLING", "JOINT", "BONE", "FRACTURE", "LIMB", "BRUISING", "ECCHYMOSIS"]):
+        return "MUSCULOSKELETAL"
+    if any(w in text for w in ["CYANOSIS", "CYANOTIC", "CHEST", "BREATHING", "RESPIRATORY", "ACCESSORY MUSCLE"]):
+        return "RESPIRATORY"
+    if any(w in text for w in ["ABDOMEN", "ABDOMINAL", "DISTENSION", "HERNIA", "ASCITES"]):
+        return "ABDOMINAL"
+    return "OTHER"
 
 
 # ── Stage 1b: Gemma 4 — BHW question generator ONLY (tiny focused output) ─────
@@ -176,8 +285,12 @@ def build_patient_context(patient_data: dict) -> str:
     parts.append("Vital Signs:\n" + ("\n".join(vitals) if vitals else "Not taken"))
 
     if patient_data.get("image_findings"):
+        findings = patient_data["image_findings"]
+        category = _extract_image_category(findings)
+        clinical_context = IMAGE_CLINICAL_CONTEXT.get(category, IMAGE_CLINICAL_CONTEXT["OTHER"])
         parts.append(
-            f"Visual Observation (AI field photo analysis — weight by specificity):\n{patient_data['image_findings']}"
+            f"Visual Observation — MedGemma field photo analysis [Category: {category}]:\n{findings}\n\n"
+            f"Image Clinical Context for [{category}] — use to guide differential:\n{clinical_context}"
         )
 
     if patient_data.get("initial_assessment"):
