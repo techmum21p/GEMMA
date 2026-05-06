@@ -455,7 +455,7 @@ async function proceedToSummary() {
   // Triage level chip (small pill in chips row)
   const triageChipCfg = {
     RED:    { bg: 'bg-danger',  label: '✱ RED TRIAGE' },
-    YELLOW: { bg: 'bg-amber',   label: '⚡ YELLOW TRIAGE' },
+    YELLOW: { bg: 'bg-yellow-400',   label: '⚡ YELLOW TRIAGE' },
     GREEN:  { bg: 'bg-forest',  label: '● GREEN TRIAGE' },
   };
   const tc = triageChipCfg[result.triage_level] || triageChipCfg.YELLOW;
@@ -466,7 +466,7 @@ async function proceedToSummary() {
   // Full-width verdict panel
   const verdictCfg = {
     RED:    { bg: 'bg-danger',  level: 'RED',    action: 'CRITICAL — Refer to RHU / Hospital Immediately' },
-    YELLOW: { bg: 'bg-amber',   level: 'YELLOW', action: 'URGENT — See Doctor On-Site at BHS' },
+    YELLOW: { bg: 'bg-yellow-400',   level: 'YELLOW', action: 'URGENT — See Doctor On-Site at BHS' },
     GREEN:  { bg: 'bg-forest',  level: 'GREEN',  action: 'STABLE — Home Care / BHW-Managed' },
   };
   const vc = verdictCfg[result.triage_level] || verdictCfg.YELLOW;
@@ -681,7 +681,7 @@ function renderPatientLog() {
   }
   empty.classList.add('hidden');
 
-  const dotColors  = { RED: 'bg-danger', YELLOW: 'bg-amber', GREEN: 'bg-forest' };
+  const dotColors  = { RED: 'bg-danger', YELLOW: 'bg-yellow-400', GREEN: 'bg-forest' };
   const statuses   = ['Pending', 'Seen', 'Referred', 'Sent Home'];
 
   filtered.slice().reverse().forEach(p => {
@@ -695,7 +695,7 @@ function renderPatientLog() {
     card.innerHTML = `
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2 min-w-0">
-          <div class="w-3 h-3 rounded-full flex-shrink-0 ${dotColors[p.triage_level] || 'bg-amber'}"></div>
+          <div class="w-3 h-3 rounded-full flex-shrink-0 ${dotColors[p.triage_level] || 'bg-yellow-400'}"></div>
           <span class="font-semibold text-sm truncate">${p.name || 'Anonymous'}</span>
           ${p.age ? `<span class="text-xs text-gray-400 flex-shrink-0">${p.age}${p.sex || ''}</span>` : ''}
         </div>
