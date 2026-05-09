@@ -270,3 +270,17 @@ async def run_triage(patient_data: dict) -> dict:
     if patient_data.get("followup_answers"):
         return await _run_refined_triage(patient_data)
     return await _run_initial_triage(patient_data)
+
+
+async def run_fallback_stress_test(patient_data: dict) -> dict:
+    """
+    Feeds deliberately broken JSON through the real _parse_triage_json chain,
+    then returns _build_fallback_with_patient_data. Used by POST /api/triage/test-fallback
+    to demonstrate the fallback safety net in demos and writeups.
+    """
+    broken = '{ triage_level: BANANA, top_conditions: [[[}'
+    try:
+        _parse_triage_json(broken)
+    except Exception as e:
+        logger.warning(f"[stress-test] Parser correctly rejected broken input: {e}")
+    return _build_fallback_with_patient_data(patient_data)

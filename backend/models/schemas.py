@@ -35,6 +35,7 @@ class TriageResponse(BaseModel):
     followup_questions: list[str]
     soap_summary: SoapNote
     disclaimer: str
+    is_fallback: bool = False
 
 
 # ── Image ─────────────────────────────────────────────────────────────────────

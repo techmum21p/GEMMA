@@ -2,7 +2,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.services.triage_service import _parse_triage_response, run_triage
+from app.services.triage_service import _parse_triage_json, run_triage
 from app.prompts.triage_prompt import TRIAGE_FALLBACK
 
 
@@ -66,7 +66,7 @@ P: Triage level YELLOW. Refer to clinic for consultation."""
 
 
 def test_parse_valid_response():
-    result = _parse_triage_response(VALID_RESPONSE)
+    result = _parse_triage_json(VALID_RESPONSE)
     assert result["triage_level"] == "YELLOW"
     assert len(result["top_conditions"]) == 5
     assert "soap_summary" in result
@@ -75,18 +75,18 @@ def test_parse_valid_response():
 def test_parse_invalid_triage_level():
     bad = json.loads(VALID_RESPONSE)
     bad["triage_level"] = "PURPLE"
-    result = _parse_triage_response(json.dumps(bad))
+    result = _parse_triage_json(json.dumps(bad))
     assert result["triage_level"] == "YELLOW"
 
 
 def test_parse_missing_keys():
     with pytest.raises((ValueError, KeyError)):
-        _parse_triage_response('{"triage_level": "RED"}')
+        _parse_triage_json('{"triage_level": "RED"}')
 
 
 def test_parse_markdown_wrapped():
     wrapped = f"```json\n{VALID_RESPONSE}\n```"
-    result = _parse_triage_response(wrapped)
+    result = _parse_triage_json(wrapped)
     assert result["triage_level"] == "YELLOW"
 
 
@@ -187,3 +187,37 @@ def test_build_fallback_with_no_vitals():
     result = _build_fallback_with_patient_data(sparse)
     assert result["is_fallback"] is True
     assert "Nahihilo." in result["soap_summary"]["S"]
+
+
+# ── New tests for run_fallback_stress_test ──
+from app.services.triage_service import run_fallback_stress_test
+
+
+@pytest.mark.asyncio
+async def test_stress_test_returns_fallback_shape():
+    result = await run_fallback_stress_test(SAMPLE_PATIENT_DATA)
+    assert result["is_fallback"] is True
+    assert result["triage_level"] == "YELLOW"
+    assert "soap_summary" in result
+    assert "Masakit ang ulo at may lagnat." in result["soap_summary"]["S"]
+
+
+@pytest.mark.asyncio
+async def test_stress_test_parser_chain_fires():
+    """Verify the broken string actually exercises _parse_triage_json before fallback."""
+    from app.services import triage_service
+    import unittest.mock as mock
+
+    original = triage_service._parse_triage_json
+    called_with = []
+
+    def spy(raw):
+        called_with.append(raw)
+        return original(raw)
+
+    with mock.patch.object(triage_service, '_parse_triage_json', side_effect=spy):
+        result = await run_fallback_stress_test(SAMPLE_PATIENT_DATA)
+
+    assert len(called_with) == 1
+    assert "BANANA" in called_with[0]
+    assert result["is_fallback"] is True
