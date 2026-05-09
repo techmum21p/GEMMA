@@ -221,3 +221,35 @@ async def test_stress_test_parser_chain_fires():
     assert len(called_with) == 1
     assert "BANANA" in called_with[0]
     assert result["is_fallback"] is True
+
+
+# ── New tests for POST /api/triage/test-fallback endpoint ──
+from fastapi.testclient import TestClient
+from main import app
+
+client = TestClient(app)
+
+
+def test_test_fallback_endpoint_returns_is_fallback():
+    res = client.post("/api/triage/test-fallback", json={
+        "chief_complaint": "Nahihilo.",
+        "age": 40,
+        "sex": "M",
+        "bp": "140/90",
+        "temperature": "37.2",
+        "heart_rate": None,
+        "spo2": None,
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["is_fallback"] is True
+    assert data["triage_level"] == "YELLOW"
+    assert "Nahihilo." in data["soap_summary"]["S"]
+
+
+def test_test_fallback_endpoint_empty_body():
+    res = client.post("/api/triage/test-fallback", json={
+        "chief_complaint": "Walang nabanggit."
+    })
+    assert res.status_code == 200
+    assert res.json()["is_fallback"] is True
