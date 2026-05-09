@@ -29,14 +29,15 @@ def _build_fallback_with_patient_data(patient_data: dict) -> dict:
     s_parts = [f"Chief complaint: {complaint}"]
     if answers:
         for q, a in answers.items():
-            s_parts.append(f"Q: {q} — A: {a}")
+            s_parts.append(f"Q: {q} — A: {a or 'No answer.'}")
     soap_s = " | ".join(s_parts)
 
     vitals = []
     if patient_data.get("bp"):
         vitals.append(f"BP: {patient_data['bp']}")
     if patient_data.get("temperature"):
-        vitals.append(f"Temp: {patient_data['temperature']}°C")
+        temp_val = str(patient_data['temperature']).rstrip('C').rstrip('°').rstrip()
+        vitals.append(f"Temp: {temp_val}°C")
     if patient_data.get("heart_rate"):
         vitals.append(f"HR: {patient_data['heart_rate']} bpm")
     if patient_data.get("spo2"):
@@ -52,7 +53,7 @@ def _build_fallback_with_patient_data(patient_data: dict) -> dict:
         "triage_reason": "Hindi ma-process ang AI assessment. Kailangan ng manu-manong pagtukoy ng triage level.",
         "is_fallback": True,
         "top_conditions": TRIAGE_FALLBACK["top_conditions"],
-        "followup_questions": TRIAGE_FALLBACK["followup_questions"],
+        "followup_questions": list(TRIAGE_FALLBACK["followup_questions"]),
         "soap_summary": {
             "S": soap_s,
             "O": soap_o,

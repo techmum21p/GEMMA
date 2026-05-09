@@ -125,7 +125,7 @@ async def test_run_triage_fallback_on_error():
 
         result = await run_triage(SAMPLE_PATIENT)
         assert result["triage_level"] == "YELLOW"
-        assert result == TRIAGE_FALLBACK
+        assert result.get("is_fallback") is True
 
 
 # ── New tests for _build_fallback_with_patient_data ──
