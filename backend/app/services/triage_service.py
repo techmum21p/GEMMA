@@ -25,7 +25,7 @@ async def _call_gemma(
     prompt: str,
     num_predict: int = 4096,
     num_ctx: int = 8192,
-    temperature: float = 0.2,
+    temperature: float = 1.0,
 ) -> str:
     """Direct Ollama API call — guarantees num_predict and num_ctx are honored."""
     async with ollama_lock.get():
@@ -39,6 +39,8 @@ async def _call_gemma(
                     "format": "json",
                     "options": {
                         "temperature": temperature,
+                        "top_p": 0.95,
+                        "top_k": 64,
                         "num_ctx": num_ctx,
                         "num_predict": num_predict,
                     },
@@ -130,6 +132,8 @@ def _repair_truncated_json(raw: str) -> dict:
 
 def _parse_triage_json(raw: str) -> dict:
     clean = raw.strip()
+    # Strip Gemma 4 thinking block if present: <|channel>thought\n...<channel|>
+    clean = re.sub(r'<\|channel>thought\n.*?<channel\|>\s*', '', clean, flags=re.DOTALL).strip()
     if clean.startswith("```"):
         clean = clean.split("```")[1].lstrip("json").strip()
     if not clean.startswith("{"):
@@ -170,7 +174,7 @@ async def _run_initial_triage(patient_data: dict) -> dict:
     """
     try:
         triage_prompt = build_gemma4_triage_prompt(patient_data)
-        raw = await _call_gemma(triage_prompt, num_predict=4096, num_ctx=8192, temperature=0.2)
+        raw = await _call_gemma(triage_prompt, num_predict=4096, num_ctx=8192, temperature=1.0)
         logger.info(f"[Stage 1a] Gemma 4 triage ({len(raw)} chars): {raw[:500]}")
 
         result = _parse_triage_json(raw)
@@ -193,7 +197,7 @@ async def _run_refined_triage(patient_data: dict) -> dict:
     """
     try:
         triage_prompt = build_gemma4_triage_prompt(patient_data)
-        raw = await _call_gemma(triage_prompt, num_predict=4096, num_ctx=8192, temperature=0.2)
+        raw = await _call_gemma(triage_prompt, num_predict=4096, num_ctx=8192, temperature=1.0)
         logger.info(f"[Stage 2a] Gemma 4 refined triage ({len(raw)} chars): {raw[:500]}")
 
         result = _parse_triage_json(raw)
