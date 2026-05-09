@@ -10,6 +10,7 @@ const state = {
   screenHistory: [],
   patients: [],
   logFilter: 'ALL',
+  manualTriageLevel: null,
 };
 
 // ── Screen Management ──────────────────────────────────────────────────────
@@ -298,6 +299,23 @@ async function submitTriage() {
 }
 
 function renderTriageResult(result) {
+  const isFallback = result.is_fallback === true;
+
+  const fallbackBanner = document.getElementById('fallback-banner');
+  const aiContent = document.getElementById('ai-result-content');
+  const btnRefine = document.getElementById('btn-refine-followup');
+  const btnSave = document.getElementById('btn-proceed-summary');
+
+  if (fallbackBanner) {
+    fallbackBanner.classList.toggle('hidden', !isFallback);
+    fallbackBanner.classList.toggle('flex', isFallback);
+  }
+  if (aiContent) aiContent.classList.toggle('hidden', isFallback);
+  if (btnRefine) btnRefine.classList.toggle('hidden', isFallback);
+  if (btnSave) btnSave.disabled = isFallback;
+
+  if (isFallback) return;
+
   // Render chief complaint as bullet list
   const complaintEl = document.getElementById('result-complaint-list');
   if (complaintEl) renderComplaintBullets(readComplaint(), complaintEl);
@@ -335,6 +353,59 @@ function renderTriageResult(result) {
         class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:border-navy focus:outline-none resize-none"></textarea>`;
     fqList.appendChild(el);
   });
+}
+
+function selectManualLevel(level) {
+  state.manualTriageLevel = level;
+  ['RED', 'YELLOW', 'GREEN'].forEach(l => {
+    const btn = document.getElementById(`manual-btn-${l.toLowerCase()}`);
+    if (btn) {
+      btn.classList.toggle('opacity-60', l !== level);
+      btn.classList.toggle('ring-4', l === level);
+      btn.classList.toggle('ring-white', l === level);
+      btn.classList.toggle('ring-offset-2', l === level);
+    }
+  });
+  const btnSave = document.getElementById('btn-proceed-summary');
+  if (btnSave) btnSave.disabled = false;
+}
+
+async function simulateAIFailure() {
+  const complaint = readComplaint() || 'Simulated patient complaint.';
+  const sexEl = document.querySelector('input[name="sex"]:checked');
+  const bpSys = document.getElementById('input-bp-sys')?.value.trim() || '';
+  const bpDia = document.getElementById('input-bp-dia')?.value.trim() || '';
+  const bp = bpSys && bpDia ? `${bpSys}/${bpDia}` : '';
+
+  showScreen('screen-loading', true);
+  startLoadingAnimation(false);
+
+  try {
+    const res = await fetch('/api/triage/test-fallback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chief_complaint: complaint,
+        age: parseInt(document.getElementById('input-age')?.value) || null,
+        sex: sexEl ? sexEl.value : null,
+        bp: bp || null,
+        temperature: document.getElementById('input-temp')?.value.trim() || null,
+        heart_rate: document.getElementById('input-hr')?.value.trim() || null,
+        spo2: document.getElementById('input-spo2')?.value.trim() || null,
+      }),
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const result = await res.json();
+    state.currentTriageResult = result;
+    state.manualTriageLevel = null;
+    stopLoadingAnimation();
+    renderTriageResult(result);
+    showScreen('screen-result');
+  } catch (err) {
+    stopLoadingAnimation();
+    showScreen('screen-intake');
+    showError(`Stress test failed: ${err.message}`);
+  }
 }
 
 async function refineWithFollowup() {
@@ -403,6 +474,12 @@ async function refineWithFollowup() {
 async function proceedToSummary() {
   const result = state.currentTriageResult;
   if (!result) return;
+
+  if (result.is_fallback && state.manualTriageLevel) {
+    result.triage_level = state.manualTriageLevel;
+    result.soap_summary = result.soap_summary || {};
+    result.soap_summary.P = `Refer to physician for evaluation. Manual triage level: ${state.manualTriageLevel}.`;
+  }
 
   const soap = result.soap_summary || {};
   document.getElementById('soap-s').textContent = soap.S || '';
@@ -637,6 +714,7 @@ function clearIntakeForm() {
   state.currentTriageResult = null;
   state.currentPatientId = null;
   state.followupQA = null;
+  state.manualTriageLevel = null;
   document.getElementById('image-findings-card').classList.add('hidden');
 }
 

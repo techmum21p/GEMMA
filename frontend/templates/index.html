@@ -246,6 +246,14 @@
       🔍 ASSESS WITH GEMMA
     </button>
 
+    <!-- Demo stress-test trigger -->
+    <div class="px-0 pb-1 text-center">
+      <button onclick="simulateAIFailure()"
+        class="text-xs text-gray-400 underline underline-offset-2 active:text-gray-600 py-2">
+        Simulate AI Failure
+      </button>
+    </div>
+
   </div>
   <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleCameraCapture(event)" />
 </div>
@@ -282,46 +290,79 @@
 <div id="screen-result" data-screen class="hidden flex-col">
   <div class="px-4 py-5 flex flex-col gap-4">
 
-    <!-- Preliminary notice — verdict revealed only after follow-up questions -->
-    <div class="bg-yellow-50 rounded-2xl shadow-sm px-5 py-4 border-l-4 border-yellow-400 flex items-start gap-4">
-      <span class="text-3xl leading-none mt-0.5">🔍</span>
-      <div>
-        <div class="font-display font-bold text-yellow-800 text-base leading-tight">Preliminary Assessment</div>
-        <div class="text-xs text-yellow-700 mt-1 leading-snug">
-          Answer the follow-up questions below, then tap <strong>Submit Answers</strong> to confirm the triage level.
+    <!-- Fallback banner — shown only when is_fallback=true -->
+    <div id="fallback-banner" class="hidden flex-col gap-4">
+      <div class="bg-amber-50 rounded-2xl shadow-sm px-5 py-4 border-l-4 border-amber-500 flex items-start gap-4">
+        <span class="text-3xl leading-none mt-0.5">⚠️</span>
+        <div>
+          <div class="font-display font-bold text-amber-900 text-base leading-tight">AI Assessment Failed</div>
+          <div class="text-sm text-amber-800 mt-1 leading-snug">
+            Please assign the triage level manually before saving.
+          </div>
         </div>
       </div>
-    </div>
-
-    <!-- Chief Complaint (bullet display) -->
-    <div class="bg-white rounded-2xl shadow-sm px-4 py-3">
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Chief Complaint</p>
-      <div id="result-complaint-list" class="flex flex-col gap-1 text-sm text-gray-800"></div>
-    </div>
-
-    <!-- Top 5 conditions -->
-    <div class="bg-white rounded-2xl shadow-sm p-5">
-      <h3 id="conditions-heading" class="font-display font-bold text-navy text-base mb-3">Possible Conditions</h3>
-      <div id="conditions-list" class="flex flex-col gap-2"></div>
-      <div class="mt-4 bg-amber/10 border border-amber/40 rounded-xl p-3 text-xs text-amber-800">
-        ⚠️ <em>Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor.</em>
+      <div class="flex flex-col gap-3">
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Select Triage Level</p>
+        <button onclick="selectManualLevel('RED')" id="manual-btn-red"
+          class="w-full bg-danger text-white font-display font-black text-xl py-4 rounded-2xl active:scale-95 transition-transform opacity-60">
+          🔴 RED — Critical, Refer Now
+        </button>
+        <button onclick="selectManualLevel('YELLOW')" id="manual-btn-yellow"
+          class="w-full bg-yellow-400 text-white font-display font-black text-xl py-4 rounded-2xl active:scale-95 transition-transform opacity-60">
+          🟡 YELLOW — See Doctor Today
+        </button>
+        <button onclick="selectManualLevel('GREEN')" id="manual-btn-green"
+          class="w-full bg-forest text-white font-display font-black text-xl py-4 rounded-2xl active:scale-95 transition-transform opacity-60">
+          🟢 GREEN — Home Care
+        </button>
       </div>
     </div>
 
-    <!-- Follow-up questions -->
-    <div class="bg-white rounded-2xl shadow-sm p-5">
-      <h3 class="font-display font-bold text-navy text-base mb-1">Follow-Up Questions</h3>
-      <p class="text-gray-400 text-xs mb-3">Ask the patient and record their answers.</p>
-      <div id="followup-questions-list" class="flex flex-col gap-4"></div>
+    <!-- AI result content — hidden when is_fallback=true -->
+    <div id="ai-result-content">
+
+      <!-- Preliminary notice — verdict revealed only after follow-up questions -->
+      <div class="bg-yellow-50 rounded-2xl shadow-sm px-5 py-4 border-l-4 border-yellow-400 flex items-start gap-4">
+        <span class="text-3xl leading-none mt-0.5">🔍</span>
+        <div>
+          <div class="font-display font-bold text-yellow-800 text-base leading-tight">Preliminary Assessment</div>
+          <div class="text-xs text-yellow-700 mt-1 leading-snug">
+            Answer the follow-up questions below, then tap <strong>Submit Answers</strong> to confirm the triage level.
+          </div>
+        </div>
+      </div>
+
+      <!-- Chief Complaint (bullet display) -->
+      <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mt-4">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Chief Complaint</p>
+        <div id="result-complaint-list" class="flex flex-col gap-1 text-sm text-gray-800"></div>
+      </div>
+
+      <!-- Top 5 conditions -->
+      <div class="bg-white rounded-2xl shadow-sm p-5 mt-4">
+        <h3 id="conditions-heading" class="font-display font-bold text-navy text-base mb-3">Possible Conditions</h3>
+        <div id="conditions-list" class="flex flex-col gap-2"></div>
+        <div class="mt-4 bg-amber/10 border border-amber/40 rounded-xl p-3 text-xs text-amber-800">
+          ⚠️ <em>Para sa kaalaman ng BHW lamang. Hindi ito pagsusuri ng doktor.</em>
+        </div>
+      </div>
+
+      <!-- Follow-up questions -->
+      <div class="bg-white rounded-2xl shadow-sm p-5 mt-4">
+        <h3 class="font-display font-bold text-navy text-base mb-1">Follow-Up Questions</h3>
+        <p class="text-gray-400 text-xs mb-3">Ask the patient and record their answers.</p>
+        <div id="followup-questions-list" class="flex flex-col gap-4"></div>
+      </div>
+
     </div>
 
-    <!-- Actions -->
+    <!-- Actions — always visible -->
     <div class="flex flex-col gap-3">
-      <button onclick="refineWithFollowup()"
+      <button onclick="refineWithFollowup()" id="btn-refine-followup"
         class="w-full bg-navy text-white font-semibold py-4 rounded-2xl text-base active:scale-95 transition-transform">
         🔄 Submit Answers & Save
       </button>
-      <button onclick="proceedToSummary()"
+      <button onclick="proceedToSummary()" id="btn-proceed-summary"
         class="w-full bg-forest text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform">
         ✅ Skip & Save Patient
       </button>
