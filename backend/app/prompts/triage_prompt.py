@@ -1,5 +1,5 @@
 # ── Stage 1a / 2a: Gemma 4 — primary clinical reasoning and triage ────────────
-GEMMA4_TRIAGE_SYSTEM_PROMPT = """You are GEMMA, an AI triage support assistant for Barangay Health Workers (BHWs) in the Philippines.
+GEMMA4_TRIAGE_SYSTEM_PROMPT = """<|think|>You are GEMMA, an AI triage support assistant for Barangay Health Workers (BHWs) in the Philippines.
 
 You are NOT a doctor. You do NOT replace a medical professional. Your role is to help the BHW make faster, safer triage decisions at the community level.
 
@@ -40,12 +40,16 @@ OTHER:
 ESCALATION RULE: If Stroke, TIA, MI, Sepsis, or Anaphylaxis appears in your top conditions AND symptoms support it — you MUST assign RED. Assigning YELLOW to a probable stroke is a patient safety failure.
 
 IMAGE FINDINGS RULES (when image_findings is provided):
-- A category tag and matching clinical context block are injected below the image findings — use them to guide your differential for that specific domain
-- Specific, detailed findings → weight heavily, factor directly into differential
-- Vague findings → treat as weak supporting evidence; state this explicitly in your reasoning
-- When chief complaint describes a specific mechanism or symptom AND image confirms a consistent finding → treat as HIGH-SPECIFICITY combined evidence; do not default to generic conditions
-- Findings contradicting reported symptoms → note the inconsistency, prioritize the patient's verbal report
-- Always explicitly state how you weighted image findings before arriving at your differential
+- A category tag and matching clinical context block are injected — use them to guide your differential for that specific domain
+- MedGemma Visual Impression confidence levels — apply these weights:
+  * HIGH confidence: MedGemma has high certainty from the image — weight named conditions heavily; fold them directly into your top differential
+  * MEDIUM confidence: Moderate certainty — use as supporting evidence; confirm against chief complaint and vitals
+  * LOW confidence: Weak signal — prioritize chief complaint and vitals; treat visual impression as context only
+- Specific, detailed clinical observations → weight heavily regardless of confidence
+- Vague observations → treat as weak supporting evidence; state this explicitly in your reasoning
+- When chief complaint matches a HIGH-confidence MedGemma visual impression → treat as HIGH-SPECIFICITY combined evidence; do not default to generic conditions
+- Findings contradicting reported symptoms → note the inconsistency; prioritize the patient's verbal report
+- Always explicitly state how you weighted image findings (including MedGemma confidence level) before arriving at your differential
 
 DIFFERENTIAL DIAGNOSIS RULES:
 - TOP CONDITIONS must be actual medical diagnoses — NOT symptoms, NOT chief complaints
@@ -55,6 +59,7 @@ DIFFERENTIAL DIAGNOSIS RULES:
 - Adjust condition probability by age and sex — no gender-inappropriate diagnoses
 
 LANGUAGE:
+- TAGLISH OUTPUT STRATEGY: For triage_reason, plain_explanation, and followup_questions — reason through the clinical logic in English first, then express your final output in simple Taglish. This prevents language drift and ensures accurate medical concepts are conveyed in clear Filipino-English mix.
 - triage_reason and plain_explanation: simple Taglish (Filipino-English mix) — clear for a BHW with no medical degree
 - followup_questions: exactly 3 BHW-friendly Taglish questions targeting genuine clinical information gaps that differentiate the top conditions — conversational tone, never ask about vitals or symptoms already stated; output [] if follow-up Q&A answers are already provided in the patient data
 - SOAP note: English — for the receiving doctor
@@ -215,6 +220,49 @@ def _extract_image_category(image_findings: str) -> str:
     return "OTHER"
 
 
+import logging as _logging
+_img_log = _logging.getLogger(__name__)
+
+
+def _parse_medgemma_findings(raw_findings: str) -> dict:
+    """Parse MedGemma's 4-section structured output into components."""
+    category = _extract_image_category(raw_findings)
+
+    obs_m = _re.search(
+        r'Observations?:\s*\n?(.*?)(?=Visual Impression:|Confidence:|$)',
+        raw_findings, _re.IGNORECASE | _re.DOTALL
+    )
+    observations = obs_m.group(1).strip() if obs_m else raw_findings
+
+    vi_m = _re.search(
+        r'Visual Impression?:\s*\n?(.*?)(?=Confidence:|$)',
+        raw_findings, _re.IGNORECASE | _re.DOTALL
+    )
+    visual_impression = vi_m.group(1).strip() if vi_m else ""
+
+    conf_m = _re.search(r'\bConfidence:\s*(HIGH|MEDIUM|LOW)\b', raw_findings, _re.IGNORECASE)
+    confidence = conf_m.group(1).upper() if conf_m else "LOW"
+
+    basis_m = _re.search(r'Confidence Basis:\s*(.+?)(?:\n|$)', raw_findings, _re.IGNORECASE)
+    confidence_basis = basis_m.group(1).strip() if basis_m else ""
+
+    parsed = {
+        "category": category,
+        "observations": observations,
+        "visual_impression": visual_impression,
+        "confidence": confidence,
+        "confidence_basis": confidence_basis,
+    }
+    _img_log.info(
+        f"\n{'─'*60}\n"
+        f"MedGemma Parsed → Category: {category} | Confidence: {confidence}\n"
+        f"Visual Impression: {visual_impression or '(none)'}\n"
+        f"Confidence Basis: {confidence_basis or '(none)'}\n"
+        f"{'─'*60}"
+    )
+    return parsed
+
+
 # ── Stage 1b: Gemma 4 — BHW question generator ONLY (tiny focused output) ─────
 GEMMA_FOLLOWUP_SYSTEM_PROMPT = """You are a friendly BHW (Barangay Health Worker) assistant in the Philippines helping with patient intake.
 
@@ -286,12 +334,27 @@ def build_patient_context(patient_data: dict) -> str:
 
     if patient_data.get("image_findings"):
         findings = patient_data["image_findings"]
-        category = _extract_image_category(findings)
+        parsed = _parse_medgemma_findings(findings)
+        category = parsed["category"]
         clinical_context = IMAGE_CLINICAL_CONTEXT.get(category, IMAGE_CLINICAL_CONTEXT["OTHER"])
-        parts.append(
-            f"Visual Observation — MedGemma field photo analysis [Category: {category}]:\n{findings}\n\n"
-            f"Image Clinical Context for [{category}] — use to guide differential:\n{clinical_context}"
-        )
+
+        img_lines = [f"Visual Observation — MedGemma field photo analysis [Category: {category}]:"]
+        img_lines.append(f"\nClinical Observations:\n{parsed['observations']}")
+
+        vi = parsed.get("visual_impression", "").strip()
+        if vi and vi.lower() != "cannot determine from image":
+            img_lines.append(f"\nMedGemma Visual Impression: {vi}")
+            img_lines.append(f"Confidence: {parsed['confidence']}")
+            if parsed.get("confidence_basis"):
+                img_lines.append(f"Confidence Basis: {parsed['confidence_basis']}")
+        else:
+            img_lines.append(
+                f"\nMedGemma Visual Impression: Cannot determine from image "
+                f"(Confidence: {parsed['confidence']})"
+            )
+
+        img_lines.append(f"\nImage Clinical Context for [{category}] — use to guide differential:\n{clinical_context}")
+        parts.append("\n".join(img_lines))
 
     if patient_data.get("initial_assessment"):
         init = patient_data["initial_assessment"]

@@ -35,7 +35,12 @@ async def analyze_image(image_path: str, chief_complaint: str) -> str:
             findings = resp.json().get("response", "").strip()
             if not findings:
                 raise ValueError("Empty response from MedGemma")
-            logger.info(f"MedGemma findings ({len(findings)} chars): {findings[:200]}")
+            logger.info(
+                f"\n{'='*60}\n"
+                f"MedGemma Stage 0 Output ({len(findings)} chars):\n"
+                f"{findings}\n"
+                f"{'='*60}"
+            )
             return findings
     except Exception as e:
         logger.error(f"Image analysis failed: {e}")
