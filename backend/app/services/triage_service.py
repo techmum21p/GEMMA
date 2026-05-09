@@ -19,6 +19,7 @@ _DEFAULT_FOLLOWUP = [
     "Allergic ka ba sa kahit anong gamot?",
 ]
 _DEFAULT_DISCLAIMER = "For BHW reference only. This is not a doctor's diagnosis."
+_STRESS_TEST_BROKEN_JSON = '{ triage_level: BANANA, top_conditions: [[[}'
 
 
 def _build_fallback_with_patient_data(patient_data: dict) -> dict:
@@ -274,11 +275,13 @@ async def run_triage(patient_data: dict) -> dict:
 
 async def run_fallback_stress_test(patient_data: dict) -> dict:
     """
-    Feeds deliberately broken JSON through the real _parse_triage_json chain,
-    then returns _build_fallback_with_patient_data. Used by POST /api/triage/test-fallback
-    to demonstrate the fallback safety net in demos and writeups.
+    Feeds deliberately broken JSON through the real _parse_triage_json chain to
+    demonstrate the two-layer parser (json.loads → _repair_truncated_json → ValueError).
+    Always returns _build_fallback_with_patient_data regardless of parse outcome —
+    this is intentional: the endpoint exists to showcase the fallback UI, not produce
+    a real triage.
     """
-    broken = '{ triage_level: BANANA, top_conditions: [[[}'
+    broken = _STRESS_TEST_BROKEN_JSON
     try:
         _parse_triage_json(broken)
     except Exception as e:
