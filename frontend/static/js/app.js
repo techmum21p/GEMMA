@@ -312,7 +312,10 @@ function renderTriageResult(result) {
   }
   if (aiContent) aiContent.classList.toggle('hidden', isFallback);
   if (btnRefine) btnRefine.classList.toggle('hidden', isFallback);
-  if (btnSave) btnSave.disabled = isFallback;
+  if (btnSave) {
+    btnSave.disabled = isFallback;
+    btnSave.textContent = isFallback ? '💾 Save with Manual Level' : '✅ Skip & Save Patient';
+  }
 
   if (isFallback) return;
 
@@ -474,6 +477,11 @@ async function refineWithFollowup() {
 async function proceedToSummary() {
   const result = state.currentTriageResult;
   if (!result) return;
+
+  if (result.is_fallback && !state.manualTriageLevel) {
+    showToast('Please select a triage level (RED, YELLOW, or GREEN) before saving.');
+    return;
+  }
 
   if (result.is_fallback && state.manualTriageLevel) {
     result.triage_level = state.manualTriageLevel;
