@@ -21,6 +21,48 @@ _DEFAULT_FOLLOWUP = [
 _DEFAULT_DISCLAIMER = "For BHW reference only. This is not a doctor's diagnosis."
 
 
+def _build_fallback_with_patient_data(patient_data: dict) -> dict:
+    """Return TRIAGE_FALLBACK enriched with available patient data and is_fallback flag."""
+    complaint = patient_data.get("chief_complaint") or "Not recorded."
+    answers = patient_data.get("followup_answers") or {}
+
+    s_parts = [f"Chief complaint: {complaint}"]
+    if answers:
+        for q, a in answers.items():
+            s_parts.append(f"Q: {q} — A: {a}")
+    soap_s = " | ".join(s_parts)
+
+    vitals = []
+    if patient_data.get("bp"):
+        vitals.append(f"BP: {patient_data['bp']}")
+    if patient_data.get("temperature"):
+        vitals.append(f"Temp: {patient_data['temperature']}°C")
+    if patient_data.get("heart_rate"):
+        vitals.append(f"HR: {patient_data['heart_rate']} bpm")
+    if patient_data.get("spo2"):
+        vitals.append(f"SpO2: {patient_data['spo2']}%")
+    if patient_data.get("age"):
+        vitals.append(f"Age: {patient_data['age']}")
+    if patient_data.get("sex"):
+        vitals.append(f"Sex: {patient_data['sex']}")
+    soap_o = ", ".join(vitals) if vitals else "No vitals recorded."
+
+    return {
+        "triage_level": "YELLOW",
+        "triage_reason": "Hindi ma-process ang AI assessment. Kailangan ng manu-manong pagtukoy ng triage level.",
+        "is_fallback": True,
+        "top_conditions": TRIAGE_FALLBACK["top_conditions"],
+        "followup_questions": TRIAGE_FALLBACK["followup_questions"],
+        "soap_summary": {
+            "S": soap_s,
+            "O": soap_o,
+            "A": "AI assessment failed — triage level assigned manually by BHW.",
+            "P": "Refer to physician for evaluation. Manual triage level pending BHW selection.",
+        },
+        "disclaimer": _DEFAULT_DISCLAIMER,
+    }
+
+
 async def _call_gemma(
     prompt: str,
     num_predict: int = 4096,
@@ -186,7 +228,7 @@ async def _run_initial_triage(patient_data: dict) -> dict:
 
     except Exception as e:
         logger.error(f"Initial triage failed: {e}. Returning fallback.")
-        return TRIAGE_FALLBACK
+        return _build_fallback_with_patient_data(patient_data)
 
 
 async def _run_refined_triage(patient_data: dict) -> dict:
@@ -215,7 +257,7 @@ async def _run_refined_triage(patient_data: dict) -> dict:
 
     except Exception as e:
         logger.error(f"Refined triage failed: {e}. Returning fallback.")
-        return TRIAGE_FALLBACK
+        return _build_fallback_with_patient_data(patient_data)
 
 
 async def run_triage(patient_data: dict) -> dict:

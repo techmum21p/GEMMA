@@ -126,3 +126,64 @@ async def test_run_triage_fallback_on_error():
         result = await run_triage(SAMPLE_PATIENT)
         assert result["triage_level"] == "YELLOW"
         assert result == TRIAGE_FALLBACK
+
+
+# ── New tests for _build_fallback_with_patient_data ──
+from app.services.triage_service import _build_fallback_with_patient_data
+
+SAMPLE_PATIENT_DATA = {
+    "chief_complaint": "Masakit ang ulo at may lagnat.",
+    "age": 35,
+    "sex": "F",
+    "bp": "130/85",
+    "temperature": "38.5",
+    "heart_rate": "92",
+    "spo2": None,
+    "followup_answers": None,
+    "initial_assessment": None,
+    "image_findings": None,
+}
+
+
+def test_build_fallback_includes_is_fallback_flag():
+    result = _build_fallback_with_patient_data(SAMPLE_PATIENT_DATA)
+    assert result["is_fallback"] is True
+
+
+def test_build_fallback_triage_level_is_yellow():
+    result = _build_fallback_with_patient_data(SAMPLE_PATIENT_DATA)
+    assert result["triage_level"] == "YELLOW"
+
+
+def test_build_fallback_soap_contains_chief_complaint():
+    result = _build_fallback_with_patient_data(SAMPLE_PATIENT_DATA)
+    assert "Masakit ang ulo at may lagnat." in result["soap_summary"]["S"]
+
+
+def test_build_fallback_soap_o_contains_vitals():
+    result = _build_fallback_with_patient_data(SAMPLE_PATIENT_DATA)
+    assert "130/85" in result["soap_summary"]["O"]
+    assert "38.5" in result["soap_summary"]["O"]
+
+
+def test_build_fallback_soap_a_mentions_manual():
+    result = _build_fallback_with_patient_data(SAMPLE_PATIENT_DATA)
+    assert "manually" in result["soap_summary"]["A"].lower()
+
+
+def test_build_fallback_with_no_vitals():
+    sparse = {
+        "chief_complaint": "Nahihilo.",
+        "age": None,
+        "sex": None,
+        "bp": None,
+        "temperature": None,
+        "heart_rate": None,
+        "spo2": None,
+        "followup_answers": None,
+        "initial_assessment": None,
+        "image_findings": None,
+    }
+    result = _build_fallback_with_patient_data(sparse)
+    assert result["is_fallback"] is True
+    assert "Nahihilo." in result["soap_summary"]["S"]
