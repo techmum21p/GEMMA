@@ -533,10 +533,7 @@ def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str, enrich
         RANK_W = 0.7 * cm
         COND_W = W - RANK_W
         for c in top_conds:
-            cond_markup = (
-                f'<b>{e(c.get("condition", ""))}</b><br/>'
-                f'<font size="8" color="#555555">{e(c.get("plain_explanation", ""))}</font>'
-            )
+            cond_markup = f'<b>{e(c.get("condition", ""))}</b>'
             cond_style = ps(f"CN{c.get('rank','')}", leading=13, leftIndent=8)
             row_tbl = Table(
                 [[Paragraph(str(c.get("rank", "")), RANK_PS),

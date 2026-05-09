@@ -55,7 +55,7 @@ def generate_excel_report(shift: dict, patients: list[dict]) -> str:
             "Kasarian": p.get("sex") or "—",
             "Chief Complaint": p.get("chief_complaint", ""),
             "Triage Level": p.get("triage_level", ""),
-            "Lahat ng Kondisyon": all_conditions,
+            "Mga Posibleng Kondisyon": all_conditions,
             "Status": p.get("status", "Pending"),
         })
 

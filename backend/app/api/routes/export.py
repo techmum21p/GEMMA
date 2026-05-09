@@ -102,6 +102,14 @@ async def export_pdf(patient_id: int, db: AsyncSession = Depends(get_db)):
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
+    # Serve existing PDF if it was already generated
+    if patient.pdf_path and Path(patient.pdf_path).exists():
+        return FileResponse(
+            path=patient.pdf_path,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{Path(patient.pdf_path).name}"'},
+        )
+
     shift = await db.get(Shift, patient.shift_id)
     bhw_name = shift.bhw_name if shift else "BHW"
 
