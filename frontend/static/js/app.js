@@ -318,7 +318,7 @@ function renderTriageResult(result) {
     el.innerHTML = `
       <div class="bg-navy text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">${i + 1}</div>
       <div>
-        <div class="font-semibold text-sm text-navy">${c.condition}</div>
+        <div class="font-bold text-sm text-navy">${c.condition}</div>
         <div class="text-xs text-gray-500 mt-0.5 leading-snug">${c.plain_explanation}</div>
       </div>`;
     condList.appendChild(el);
@@ -416,15 +416,19 @@ async function proceedToSummary() {
     const name = (c.condition || '').trim();
     return name && !_SUMMARY_SKIP.has(name.toLowerCase()) && !_SUMMARY_FALLBACK.test(name);
   });
-  document.getElementById('soap-a-conditions').innerHTML = realConds.map(c =>
+  // Assessment — SOAP A clinical text first (doctor-facing English), then ranked condition names only
+  const aItems = [];
+  if (soap.A) {
+    aItems.push(`<p class="text-sm text-gray-700 leading-relaxed mb-2">${soap.A}</p>`);
+  }
+  aItems.push(...realConds.map(c =>
     `<div class="flex gap-2 items-start text-sm">
-      <span class="text-navy font-bold flex-shrink-0 mt-0.5">•</span>
-      <span><span class="font-semibold text-gray-800">${c.condition}</span><span class="text-gray-500"> — ${c.plain_explanation}</span></span>
+      <span class="text-navy font-bold flex-shrink-0 mt-0.5">${c.rank}.</span>
+      <span class="font-bold text-gray-800">${c.condition}</span>
     </div>`
-  ).join('');
-  const noteEl = document.getElementById('soap-a-note');
-  if (soap.A) { noteEl.textContent = `Note: ${soap.A}`; noteEl.classList.remove('hidden'); }
-  else noteEl.classList.add('hidden');
+  ));
+  document.getElementById('soap-a-conditions').innerHTML = aItems.join('');
+  document.getElementById('soap-a-note').classList.add('hidden');
 
   const complaint = readComplaint();
   const name      = document.getElementById('input-name').value.trim() || null;
@@ -604,6 +608,10 @@ function _openPDFViewer(blobUrl) {
   }, 5000);
 
   iframe.src = blobUrl;
+}
+
+function openPDFInTab() {
+  if (_pdfBlobUrl) window.open(_pdfBlobUrl, '_blank');
 }
 
 function closePDFViewer() {
