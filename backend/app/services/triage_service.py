@@ -226,6 +226,41 @@ def _repair_truncated_json(raw: str) -> dict:
     }
 
 
+def _extract_conditions_from_soap(soap_a: str) -> list[dict]:
+    """
+    Parse SOAP A free text into structured conditions when top_conditions is empty.
+
+    Gemma 4 sometimes embeds the differential as:
+      "Working Dx: <condition> — <explanation>. R/O <condition> — <explanation>."
+    instead of populating top_conditions. This recovers those entries.
+    """
+    conditions = []
+    rank = 1
+    for part in re.split(r'(?=Working Dx:|R/O\s+)', soap_a):
+        part = part.strip()
+        if not part:
+            continue
+        m = re.match(r'(?:Working Dx:|R/O)\s+(.+)', part, re.DOTALL)
+        if not m:
+            continue
+        rest = m.group(1).strip()
+        sep = re.search(r'\s*[—–]\s*|\s+-\s+', rest)
+        if sep:
+            cond_name = rest[:sep.start()].strip().rstrip('.')
+            explanation = rest[sep.end():].strip()
+        else:
+            cond_name = rest.strip().rstrip('.')
+            explanation = ""
+        if cond_name and len(cond_name) < 120:
+            conditions.append({
+                "rank": rank,
+                "condition": cond_name,
+                "plain_explanation": explanation,
+            })
+            rank += 1
+    return conditions
+
+
 def _parse_triage_json(raw: str) -> dict:
     """
     Parse and validate raw JSON output from Gemma 4.
@@ -271,6 +306,30 @@ def _parse_triage_json(raw: str) -> dict:
 
     if not result.get("disclaimer"):
         result["disclaimer"] = _DEFAULT_DISCLAIMER
+
+    # Normalize soap_summary: ensure all four SOAP fields exist with non-empty defaults
+    soap = result.get("soap_summary") or {}
+    if not isinstance(soap, dict):
+        soap = {}
+    level = result.get("triage_level", "YELLOW")
+    result["soap_summary"] = {
+        "S": soap.get("S") or "See chief complaint above.",
+        "O": soap.get("O") or "See vitals in patient information above.",
+        "A": soap.get("A") or "See top conditions above.",
+        "P": soap.get("P") or f"Triage level: {level}. Refer to physician for further evaluation.",
+    }
+
+    # Backfill: Gemma 4 sometimes embeds conditions only in SOAP A instead of top_conditions
+    if not result["top_conditions"]:
+        soap_a = result["soap_summary"].get("A", "")
+        if soap_a:
+            extracted = _extract_conditions_from_soap(soap_a)
+            if extracted:
+                result["top_conditions"] = extracted
+                logger.info(
+                    f"  → top_conditions empty — extracted {len(extracted)} condition(s) from SOAP A"
+                )
+
     return result
 
 

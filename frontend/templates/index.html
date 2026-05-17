@@ -674,12 +674,16 @@
   <div id="pdf-viewer-fallback" class="hidden flex-1 flex items-center justify-center p-6">
     <div class="text-center w-full max-w-xs">
       <div class="text-5xl mb-4">📄</div>
-      <div class="font-display font-bold text-xl text-navy mb-2">PDF Saved</div>
+      <div class="font-display font-bold text-xl text-navy mb-2">PDF Ready</div>
       <p class="text-gray-500 text-sm mb-6 leading-relaxed">
-        The handoff document has been saved to the <strong>exports/pdfs/</strong> folder.
+        Tap the button below to open the handoff document.
       </p>
+      <a id="pdf-open-link" href="#" target="_blank"
+        class="block w-full bg-navy text-white font-display font-bold py-4 rounded-2xl text-base text-center active:scale-95 transition-transform mb-3">
+        Open PDF
+      </a>
       <button onclick="closePDFViewer()"
-        class="w-full bg-navy text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform">
+        class="w-full bg-gray-200 text-navy font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform">
         Back to Summary
       </button>
     </div>

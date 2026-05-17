@@ -638,6 +638,7 @@ function startEnrichmentPolling(patientId) {
 }
 
 let _pdfBlobUrl = null;
+let _pdfDirectUrl = null;
 
 async function generatePDF() {
   if (!state.currentPatientId) { showError('No patient saved yet.'); return; }
@@ -646,21 +647,43 @@ async function generatePDF() {
   btn.textContent = '⏳ Generating...';
   btn.disabled = true;
 
+  _pdfDirectUrl = `/api/export/pdf/${state.currentPatientId}`;
+  const isAndroid = /Android/i.test(navigator.userAgent);
+
   try {
-    const res = await fetch(`/api/export/pdf/${state.currentPatientId}`);
+    const res = await fetch(_pdfDirectUrl);
     if (!res.ok) throw new Error(await res.text());
 
-    const blob = await res.blob();
-    if (_pdfBlobUrl) URL.revokeObjectURL(_pdfBlobUrl);
-    _pdfBlobUrl = URL.createObjectURL(blob);
-
-    _openPDFViewer(_pdfBlobUrl);
+    if (isAndroid) {
+      // Android can't render PDFs in iframes — show a tap-to-open link instead.
+      // A real anchor tap is never blocked by popup blockers.
+      _showAndroidPDFFallback(_pdfDirectUrl);
+    } else {
+      const blob = await res.blob();
+      if (_pdfBlobUrl) URL.revokeObjectURL(_pdfBlobUrl);
+      _pdfBlobUrl = URL.createObjectURL(blob);
+      _openPDFViewer(_pdfBlobUrl);
+    }
   } catch (err) {
     showError(`Could not generate PDF: ${err.message}`);
   } finally {
     btn.textContent = '↓ Generate PDF Handoff';
     btn.disabled = false;
   }
+}
+
+function _showAndroidPDFFallback(directUrl) {
+  const encounterId = document.getElementById('summary-encounter-id')?.textContent || '';
+  document.getElementById('pdf-viewer-title').textContent = encounterId;
+
+  const link = document.getElementById('pdf-open-link');
+  if (link) link.href = directUrl;
+
+  document.getElementById('pdf-viewer-loading').classList.add('hidden');
+  document.getElementById('pdf-iframe').classList.add('hidden');
+  document.getElementById('pdf-viewer-fallback').classList.remove('hidden');
+
+  showScreen('screen-pdf-viewer');
 }
 
 function _openPDFViewer(blobUrl) {
@@ -696,7 +719,8 @@ function _openPDFViewer(blobUrl) {
 }
 
 function openPDFInTab() {
-  if (_pdfBlobUrl) window.open(_pdfBlobUrl, '_blank');
+  const url = _pdfDirectUrl || _pdfBlobUrl;
+  if (url) window.open(url, '_blank');
 }
 
 function closePDFViewer() {
