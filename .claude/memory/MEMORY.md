@@ -1,1 +1,0 @@
-- [Project: GEMMA scaffold](project_gemma.md) — Full project scaffolded May 2026; hackathon deadline May 18
