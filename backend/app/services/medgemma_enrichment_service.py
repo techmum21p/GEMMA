@@ -1,3 +1,24 @@
+"""
+MedGemma PDF Enrichment Service.
+
+After Gemma 4 produces the final triage assessment (Stage 2a), this service
+uses MedGemma 4B to generate compact clinical consult notes for each
+differential diagnosis. These notes appear in the physician section of the
+handoff PDF and are intended for the receiving doctor, not the BHW.
+
+MedGemma 4B is a medically fine-tuned variant of Gemma optimised for
+clinical language and medical imaging tasks. It is used here specifically
+for its clinical note generation capability — Gemma 4 E4B handles all
+primary triage reasoning because it outperforms MedGemma on general
+clinical reasoning benchmarks (MedQA: Gemma 3 27B 85.3% vs MedGemma 4B
+69.1%). MedGemma's strength is specialist clinical documentation.
+
+Enrichment runs as a background prefetch (enrichment_cache.py) triggered
+immediately after Stage 2a completes, so PDF generation is near-instant.
+If MedGemma is unreachable or returns malformed output, enrich_triage()
+returns [] and the PDF renders without the physician section — graceful
+degradation with no impact on the BHW-facing triage flow.
+"""
 import json
 import logging
 import re

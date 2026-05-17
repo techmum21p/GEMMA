@@ -1,3 +1,32 @@
+"""
+GEMMA AI Triage Pipeline — Core orchestration module.
+
+Implements the two-stage Gemma 4 E4B triage workflow that powers GEMMA's
+decision-support system for Barangay Health Workers (BHWs):
+
+  Stage 1a — Initial triage:
+    Single Gemma 4 call → full triage JSON (triage_level, top_conditions,
+    followup_questions, SOAP note). Questions are generated in the same
+    inference as the clinical assessment, eliminating a separate round-trip.
+
+  Stage 2a — Refined triage (after BHW answers follow-up questions):
+    Second Gemma 4 call with Q&A answers appended → updated triage JSON.
+    Immediately triggers a background MedGemma enrichment prefetch so the PDF
+    physician section is ready by the time the BHW clicks "Generate PDF".
+
+MedGemma (image analysis and PDF enrichment) is coordinated via:
+  image_service.py    — Stage 0, optional visual assessment before Stage 1a
+  enrichment_cache.py — background prefetch after Stage 2a
+
+All Ollama calls use direct httpx POST to /api/generate with format="json"
+to guarantee num_predict and num_ctx are honoured. LangChain OllamaLLM
+silently ignores these parameters, which caused output truncation in testing.
+
+Fallback safety: any JSON parse or validation failure triggers
+_build_fallback_with_patient_data(), which returns is_fallback=True so the
+frontend surfaces an amber banner and a manual RED/YELLOW/GREEN selector,
+keeping the BHW operational even if the model is unreachable.
+"""
 import json
 import logging
 import re
@@ -110,6 +139,14 @@ async def _call_gemma(
 
 
 def _normalize_condition(c: dict, idx: int) -> dict:
+    """
+    Normalise a condition entry from Gemma 4 output into the canonical schema.
+
+    Gemma 4 occasionally uses alternate field names (e.g. "name", "diagnosis",
+    "disease") despite the prompt specifying "condition". This function maps all
+    observed variants to the standard {"rank", "condition", "plain_explanation"}
+    shape expected by the frontend and PDF generator.
+    """
     if not isinstance(c, dict):
         return {"rank": idx + 1, "condition": f"Condition {idx + 1}", "plain_explanation": ""}
     condition = (
@@ -190,6 +227,18 @@ def _repair_truncated_json(raw: str) -> dict:
 
 
 def _parse_triage_json(raw: str) -> dict:
+    """
+    Parse and validate raw JSON output from Gemma 4.
+
+    Handles three common Gemma 4 output quirks:
+      1. Thinking blocks:  <|channel>thought\\n...<channel|> prefixes stripped
+      2. Markdown fences:  ```json ... ``` wrappers stripped
+      3. Truncated output: falls back to _repair_truncated_json() which
+         regex-extracts whatever fields arrived before the cutoff
+
+    Raises ValueError if triage_level is not one of RED, YELLOW, GREEN —
+    the caller catches this and activates the patient-data fallback.
+    """
     clean = raw.strip()
     # Strip Gemma 4 thinking block if present: <|channel>thought\n...<channel|>
     clean = re.sub(r'<\|channel>thought\n.*?<channel\|>\s*', '', clean, flags=re.DOTALL).strip()

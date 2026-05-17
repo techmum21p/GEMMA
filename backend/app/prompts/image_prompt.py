@@ -1,3 +1,22 @@
+"""
+MedGemma image prompt templates — Stage 0 of the GEMMA triage pipeline.
+
+IMAGE_SYSTEM_PROMPT instructs MedGemma 4B to produce a structured four-section
+report from a field photograph taken by a BHW.  The four sections are:
+
+  Category        — one of WOUND | SKIN | EYE | ORAL | MUSCULOSKELETAL |
+                    RESPIRATORY | ABDOMINAL | OTHER
+  Observations    — clinical-language description of visible findings only
+                    (no diagnoses in this section)
+  Visual Impression — 1-3 most likely conditions with visual rationale
+  Confidence      — HIGH / MEDIUM / LOW with a one-sentence basis
+
+The structured output is then parsed by _parse_medgemma_findings() in
+triage_prompt.py to extract the category and confidence level.  Gemma 4
+receives the parsed findings alongside the appropriate clinical context block
+from IMAGE_CLINICAL_CONTEXT, and applies specificity-weighting rules to
+decide how much the image evidence influences its differential diagnosis.
+"""
 IMAGE_SYSTEM_PROMPT = """You are a medical visual assessment assistant for a Barangay Health Worker (BHW) in the Philippines.
 
 You are analyzing a FIELD PHOTOGRAPH taken by a community health worker using a mobile phone.
@@ -33,6 +52,12 @@ If the image is not a medical photograph: Category: OTHER, Observations: "Image 
 
 
 def build_image_prompt(chief_complaint: str) -> str:
+    """
+    Build the user-turn prompt appended after IMAGE_SYSTEM_PROMPT.
+
+    Provides MedGemma with the patient's chief complaint as contextual
+    grounding so its visual assessment is anchored to the reported symptoms.
+    """
     return (
         f"The patient's chief complaint is: {chief_complaint}\n\n"
         "Analyze this field photograph. Output all four sections in order: "

@@ -1,3 +1,22 @@
+"""
+MedGemma Image Analysis Service — Stage 0 of the GEMMA triage pipeline.
+
+When a BHW takes a field photo (wound, rash, eye condition, etc.), this
+service sends the base64-encoded image to MedGemma 4B via Ollama's
+multimodal /api/generate endpoint. MedGemma produces a structured four-
+section report: Category, Observations, Visual Impression, and Confidence.
+
+The findings text is injected into the patient_data dict before Gemma 4's
+Stage 1a call. Gemma 4 then applies specificity-weighted image evidence
+rules defined in the triage prompt:
+  HIGH confidence  → fold conditions directly into differential
+  MEDIUM confidence → use as supporting evidence
+  LOW confidence   → treat as weak context only; prioritise verbal report
+
+Stage 0 is optional — triage proceeds normally when no image is provided.
+On any MedGemma failure, a Filipino-language fallback string is returned so
+the BHW is informed without the pipeline crashing.
+"""
 import base64
 import logging
 import time
@@ -11,11 +30,26 @@ logger = logging.getLogger(__name__)
 
 
 def _encode_image(image_path: str) -> str:
+    """Read an image file and return its base64-encoded string for the Ollama images array."""
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
 
 
 async def analyze_image(image_path: str, chief_complaint: str) -> str:
+    """
+    Stage 0: Send a field photo to MedGemma 4B for visual assessment.
+
+    Posts the image as a base64 array to Ollama's multimodal /api/generate
+    endpoint. MedGemma returns a structured plain-text report with four
+    sections (Category, Observations, Visual Impression, Confidence).
+
+    The returned string is injected into patient_data["image_findings"] before
+    Gemma 4's Stage 1a prompt is built. Gemma 4 applies specificity-weighting
+    rules to decide how much the image findings shift its differential.
+
+    Returns a Filipino-language fallback string on any failure so the BHW
+    is informed and the pipeline can continue without the image findings.
+    """
     border = "─" * 62
     logger.info(
         f"\n┌{border}┐\n"

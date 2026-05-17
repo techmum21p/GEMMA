@@ -1,3 +1,13 @@
+"""
+Email API route — send the shift report to the barangay health coordinator.
+
+Endpoint:
+  POST /api/email/shift-report
+      Generates the Excel shift report and emails it to the coordinator.
+      Recipient email can be overridden in the request body (collected at the
+      End Shift screen) or falls back to the email stored on the shift record.
+      Returns 503 if SMTP is not configured in .env.
+"""
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException

@@ -1,3 +1,16 @@
+"""
+GEMMA FastAPI application entry point.
+
+Wires together all API routers, mounts the frontend static files, and
+manages the application lifespan (database initialisation on startup).
+
+Run with:
+    cd backend
+    uvicorn main:app --reload
+
+Or directly:
+    python main.py
+"""
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,6 +38,7 @@ _BANNER = """
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Startup: initialise SQLite DB.  Shutdown: log teardown message."""
     print(_BANNER)
     logger.info("━━━ GEMMA startup sequence initiated ━━━")
     logger.info(f"  Ollama base URL : {settings.OLLAMA_BASE_URL}")
@@ -68,6 +82,7 @@ if static_path.exists():
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
+    """Serve the single-page PWA frontend (index.html)."""
     html_file = FRONTEND_DIR / "templates" / "index.html"
     if html_file.exists():
         return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
@@ -76,12 +91,14 @@ async def serve_frontend():
 
 @app.get("/manifest.json")
 async def serve_manifest():
+    """Serve the PWA web app manifest so Android Chrome can install the app."""
     from fastapi.responses import FileResponse
     return FileResponse(str(FRONTEND_DIR / "static" / "manifest.json"), media_type="application/manifest+json")
 
 
 @app.get("/health")
 async def health():
+    """Simple health check endpoint used by deployment scripts."""
     return {"status": "ok", "service": "GEMMA"}
 
 

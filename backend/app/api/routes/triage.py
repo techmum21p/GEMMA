@@ -1,3 +1,23 @@
+"""
+Triage API routes — the primary entry point into the GEMMA AI pipeline.
+
+Endpoints:
+  POST /api/triage         — Text-only triage.  Accepts patient demographic
+                             data, vitals, chief complaint, and optional
+                             follow-up Q&A answers as form fields.  Routes to
+                             Stage 1a (initial) or Stage 2a (refined) based on
+                             whether followup_answers is present.
+
+  POST /api/triage/image   — Multimodal triage.  Same as above but also
+                             accepts an image upload.  The image is saved to
+                             disk and sent to MedGemma (Stage 0) before the
+                             Gemma 4 triage call.
+
+  POST /api/triage/test-fallback — Demo endpoint that feeds deliberately
+                             broken JSON through the parser chain and returns
+                             the is_fallback=True response.  Used to showcase
+                             the graceful degradation UI during demos.
+"""
 import json
 import logging
 import shutil
@@ -41,6 +61,12 @@ def _build_patient_data(
     followup_answers: str = "{}",
     initial_assessment: str = "",
 ) -> dict:
+    """
+    Coerce raw form strings into a typed patient_data dict for the triage pipeline.
+
+    Empty strings become None (not passed to Gemma 4 to keep prompts lean).
+    followup_answers and initial_assessment are JSON strings deserialised here.
+    """
     age_int = None
     try:
         age_int = int(age) if age else None
@@ -84,6 +110,13 @@ async def triage_text(
     followup_answers: str = Form(default="{}"),
     initial_assessment: str = Form(default=""),
 ):
+    """
+    Run text-only triage via Gemma 4.
+
+    Routes to Stage 1a (initial assessment) when followup_answers is empty,
+    or Stage 2a (refined assessment) when follow-up Q&A answers are provided.
+    Returns is_fallback=True if Gemma 4 output cannot be parsed.
+    """
     patient_data = _build_patient_data(
         chief_complaint=chief_complaint,
         age=age, sex=sex, bp=bp, temperature=temperature,
@@ -107,6 +140,13 @@ async def triage_with_image(
     spo2: str = Form(default=""),
     followup_answers: str = Form(default="{}"),
 ):
+    """
+    Multimodal triage: image upload → MedGemma Stage 0 → Gemma 4 Stage 1a/2a.
+
+    The uploaded file is saved to exports/images/ and passed to analyze_image().
+    MedGemma's findings string is injected into patient_data before the Gemma 4
+    triage call.  The response includes image_path and image_findings fields.
+    """
     ext = Path(image.filename).suffix if image.filename else ".jpg"
     img_path = UPLOAD_DIR / f"{uuid.uuid4()}{ext}"
     with open(img_path, "wb") as f:

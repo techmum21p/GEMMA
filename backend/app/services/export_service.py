@@ -1,3 +1,21 @@
+"""
+Excel Shift Report Generator.
+
+generate_excel_report() produces a two-sheet .xlsx file using Pandas and
+openpyxl:
+
+  Sheet 1 — Patient Log
+    One row per patient with triage level colour-coded (RED / YELLOW / GREEN)
+    and all differential diagnoses listed in the Mga Posibleng Kondisyon column.
+
+  Sheet 2 — Shift Summary
+    Aggregate statistics: patient counts by triage level with percentages,
+    shift start/end times, BHW name, and the top 3 most common conditions
+    across the shift (useful for barangay health surveillance).
+
+Files are written to exports/reports/ and the path is returned for the route
+handler to stream as a file download or email attachment.
+"""
 import json
 import logging
 from collections import Counter
@@ -21,6 +39,13 @@ TRIAGE_COLORS = {
 
 
 def generate_excel_report(shift: dict, patients: list[dict]) -> str:
+    """
+    Generate the shift Excel report and return the file path.
+
+    Builds Patient Log and Shift Summary DataFrames, writes them via Pandas
+    ExcelWriter, then applies openpyxl styling (navy headers, triage colour
+    fills, column widths, text wrapping).
+    """
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     safe_name = shift.get("bhw_name", "BHW").replace(" ", "_")
     file_path = EXPORT_DIR / f"shift_{safe_name}_{ts}.xlsx"
@@ -130,6 +155,7 @@ def generate_excel_report(shift: dict, patients: list[dict]) -> str:
 
 
 def _style_patient_sheet(ws, df: pd.DataFrame) -> None:
+    """Apply navy header, triage level colour fills, and column widths to the Patient Log sheet."""
     header_fill = PatternFill(start_color="1B3A6B", end_color="1B3A6B", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, size=11)
 
@@ -158,6 +184,7 @@ def _style_patient_sheet(ws, df: pd.DataFrame) -> None:
 
 
 def _style_summary_sheet(ws) -> None:
+    """Apply navy section header rows and column widths to the Shift Summary sheet."""
     bold_rows = {1, 7, 13}
     header_fill = PatternFill(start_color="1B3A6B", end_color="1B3A6B", fill_type="solid")
 

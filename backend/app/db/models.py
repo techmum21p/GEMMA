@@ -1,3 +1,15 @@
+"""
+SQLAlchemy ORM models for the GEMMA triage application.
+
+Two tables:
+  shifts   — one record per BHW shift (start/end time, BHW name)
+  patients — one record per triaged patient, linked to a shift
+
+JSON data (top_conditions, followup_questions, followup_qa, soap_notes) is
+stored as serialised JSON strings in TEXT columns.  SQLite does not have a
+native JSON column type, and keeping the data as strings avoids any
+ORM-level deserialisation surprises when reading back from the DB.
+"""
 import uuid
 from datetime import datetime, date
 
@@ -10,6 +22,13 @@ class Base(DeclarativeBase):
 
 
 class Shift(Base):
+    """
+    Represents a single BHW duty shift.
+
+    A shift groups all patients triaged by one BHW during one session.
+    coordinator_email is optional at shift start and can be collected later
+    at the End Shift screen before the email report is sent.
+    """
     __tablename__ = "shifts"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -23,6 +42,15 @@ class Shift(Base):
 
 
 class Patient(Base):
+    """
+    Represents one triaged patient within a shift.
+
+    All AI-generated content (top_conditions, soap_notes, followup_questions,
+    followup_qa) is stored as JSON strings.  image_path points to the uploaded
+    photo on the local filesystem; image_findings stores MedGemma's plain-text
+    assessment. pdf_path is set after the first PDF generation and reused on
+    subsequent downloads.
+    """
     __tablename__ = "patients"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

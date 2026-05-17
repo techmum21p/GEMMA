@@ -1,3 +1,20 @@
+"""
+Export API routes — PDF handoff documents and Excel shift reports.
+
+Endpoints:
+  GET /api/export/enrichment-status/{patient_id}
+      Lightweight poll — returns {"ready": bool} so the frontend can show a
+      spinner while MedGemma enrichment runs in the background.
+
+  GET /api/export/excel/{shift_id}
+      Generate (or re-generate) the shift Excel report (two sheets: Patient
+      Log and Shift Summary) and stream it as a download.
+
+  GET /api/export/pdf/{patient_id}
+      Generate the BHW handoff PDF for a patient using ReportLab.  If a PDF
+      already exists on disk for this patient it is served directly (cached).
+      MedGemma enrichment is fetched from the prefetch cache if available.
+"""
 import json
 import logging
 from pathlib import Path
@@ -17,6 +34,7 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 
 
 def _patient_to_dict(patient: Patient) -> dict:
+    """Convert a Patient ORM instance to a plain dict for service layer consumption."""
     return {
         "id": patient.id,
         "shift_id": patient.shift_id,
@@ -44,6 +62,7 @@ def _patient_to_dict(patient: Patient) -> dict:
 
 
 def _shift_to_dict(shift: Shift) -> dict:
+    """Convert a Shift ORM instance to a plain dict for service layer consumption."""
     return {
         "id": shift.id,
         "bhw_name": shift.bhw_name,

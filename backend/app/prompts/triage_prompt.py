@@ -1,3 +1,39 @@
+"""
+Prompt templates for the GEMMA AI triage pipeline.
+
+This module contains all system prompts and prompt-builder functions used by
+Gemma 4 E4B and MedGemma 4B.  The design philosophy is that clinical
+reasoning rules live here — not scattered across service code — making them
+easy for a domain expert to audit and iterate.
+
+Prompt architecture:
+  GEMMA4_TRIAGE_SYSTEM_PROMPT   — Gemma 4 triage system prompt.  Includes:
+    • Triage level rules (RED / YELLOW / GREEN) with hard RED-flag conditions
+    • Few-shot examples (stroke vs hypertensive urgency) to anchor reasoning
+    • Differential diagnosis rules (diagnoses only, not symptoms)
+    • Image specificity-weighting instructions
+    • SOAP note format specification with field-level rules
+    • Language rules (Taglish output, English SOAP)
+
+  GEMMA_FOLLOWUP_SYSTEM_PROMPT  — Legacy Stage 1b prompt (kept for reference;
+    follow-up questions are now generated inside Stage 1a).
+
+  MEDGEMMA_ENRICHMENT_SYSTEM_PROMPT — MedGemma clinical notes prompt for the
+    physician section of the handoff PDF.
+
+  IMAGE_CLINICAL_CONTEXT        — Per-category clinical context injected into
+    the Gemma 4 prompt when MedGemma identifies the image category (WOUND,
+    SKIN, EYE, ORAL, MUSCULOSKELETAL, RESPIRATORY, ABDOMINAL, OTHER).
+
+  TRIAGE_FALLBACK               — Safe static fallback returned as is_fallback=True
+    when Gemma 4 output cannot be parsed.
+
+Builders:
+  build_gemma4_triage_prompt()      — Assembles system prompt + patient context
+  build_patient_context()           — Formats patient dict as structured text
+  build_medgemma_enrichment_prompt() — Assembles MedGemma clinical notes prompt
+  build_gemma_followup_prompt()     — Legacy Stage 1b prompt builder
+"""
 # ── Stage 1a / 2a: Gemma 4 — primary clinical reasoning and triage ────────────
 GEMMA4_TRIAGE_SYSTEM_PROMPT = """<|think|>You are GEMMA, an AI triage support assistant for Barangay Health Workers (BHWs) in the Philippines.
 
@@ -307,7 +343,17 @@ RULES:
 
 
 def build_patient_context(patient_data: dict) -> str:
-    """Build a structured patient data block from a form-filled dict."""
+    """
+    Format a patient_data dict into the structured text block injected into Gemma 4 prompts.
+
+    Sections included (only if data is present):
+      Demographics  — age and sex
+      Chief Complaint
+      Vital Signs   — BP, temperature, heart rate, SpO2
+      Image Findings — MedGemma output parsed into category + clinical context block
+      Initial Assessment — Stage 1a result carried forward into Stage 2a
+      Follow-up Q&A  — BHW-collected answers appended for Stage 2a refinement
+    """
     parts = []
 
     demo = []
@@ -375,6 +421,13 @@ def build_patient_context(patient_data: dict) -> str:
 
 
 def build_gemma4_triage_prompt(patient_data: dict) -> str:
+    """
+    Assemble the full Gemma 4 prompt: system instructions + patient context + task instruction.
+
+    The task instruction varies by pipeline stage:
+      Stage 1a (no followup_answers) — initial assessment + generate follow-up questions
+      Stage 2a (has followup_answers) — refined assessment incorporating Q&A, omit questions
+    """
     context = build_patient_context(patient_data)
     has_qa = bool(patient_data.get("followup_answers"))
     instruction = (
@@ -396,6 +449,12 @@ def build_gemma4_triage_prompt(patient_data: dict) -> str:
 
 
 def build_gemma_followup_prompt(clinical_text: str, patient_data: dict) -> str:
+    """
+    Legacy Stage 1b prompt: generate 3 BHW-friendly Taglish follow-up questions.
+
+    No longer called in the current pipeline — questions are now generated within
+    Stage 1a to avoid a separate Ollama round-trip. Kept for reference.
+    """
     chief = patient_data.get("chief_complaint", "")
     vitals_parts = []
     if patient_data.get("bp"):          vitals_parts.append(f"BP {patient_data['bp']}")
@@ -416,6 +475,13 @@ def build_gemma_followup_prompt(clinical_text: str, patient_data: dict) -> str:
 
 
 def build_medgemma_enrichment_prompt(triage_output: dict) -> str:
+    """
+    Assemble the MedGemma prompt for generating clinical consult notes per condition.
+
+    Passes the Gemma 4 triage output (level, reason, conditions, SOAP) to
+    MedGemma so it can produce condition-specific clinical_summary,
+    priority_workup, and red_flags for the physician section of the handoff PDF.
+    """
     conditions = triage_output.get("top_conditions", [])
     conditions_text = "\n".join(
         f"{c.get('rank', i + 1)}. {c['condition']}"

@@ -1,3 +1,20 @@
+"""
+MedGemma Enrichment Prefetch Cache.
+
+After Stage 2a (refined Gemma 4 triage) completes, the pipeline immediately
+fires a background asyncio.Task to run MedGemma enrichment. This module
+stores that task keyed by an MD5 hash of the top_conditions list.
+
+When the BHW clicks "Generate PDF", get_or_fetch() checks whether the
+prefetch task has already finished:
+  - Cache hit (task done)  → return result immediately, near-zero wait
+  - Cache hit (task still running) → await the existing task
+  - Cache miss             → run enrichment synchronously now
+
+A maximum of 20 entries are kept; the oldest is evicted when the cap is
+reached. The cache is in-process memory only — it does not persist across
+server restarts, which is acceptable given GEMMA's single-session design.
+"""
 import asyncio
 import hashlib
 import json
@@ -10,6 +27,7 @@ _MAX_CACHE = 20
 
 
 def _make_key(triage_result: dict) -> str:
+    """Return an MD5 cache key derived from the top_conditions list."""
     conditions = triage_result.get("top_conditions", [])
     return hashlib.md5(json.dumps(conditions, sort_keys=True).encode()).hexdigest()
 

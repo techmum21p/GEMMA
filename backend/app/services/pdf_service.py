@@ -1,3 +1,27 @@
+"""
+BHW Handoff PDF Generator — produces the doctor-facing patient handoff document.
+
+generate_pdf() is the public entry point.  It:
+  1. Fetches MedGemma enrichment data from the prefetch cache (or runs it now).
+  2. Calls _generate_with_reportlab() to build the PDF using ReportLab.
+
+The PDF contains:
+  - GEMMA header (navy) with Barangay Platero branding
+  - Triage level badge (colour-coded RED / YELLOW / GREEN) with action label
+  - Patient demographics and vitals
+  - Chief complaint (bullet-formatted)
+  - Top N differential diagnoses
+  - Follow-up Q&A if collected
+  - SOAP note (doctor-facing, English)
+  - Image findings from MedGemma (if image was provided)
+  - Additional Clinical Notes per condition (MedGemma enrichment physician section)
+  - Filipino-language disclaimer
+  - Footer with generation timestamp
+
+ReportLab is used instead of WeasyPrint because WeasyPrint requires system
+libraries (libcairo, libpango) that are not reliably available on a Windows
+laptop.  ReportLab is pure Python and installs without system dependencies.
+"""
 import json
 import logging
 import re
@@ -127,6 +151,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 
 def _build_html(patient: dict, bhw_name: str) -> str:
+    """Build the HTML string for a patient handoff document (unused — kept for reference)."""
     name    = patient.get("name") or "Not provided"
     age     = patient.get("age")
     sex_raw = patient.get("sex")
@@ -246,6 +271,14 @@ def _build_html(patient: dict, bhw_name: str) -> str:
 
 
 async def generate_pdf(patient: dict, bhw_name: str) -> str:
+    """
+    Generate a ReportLab PDF handoff document for a triaged patient.
+
+    Fetches MedGemma enrichment (clinical notes per condition) from the
+    prefetch cache if available, then builds the PDF and returns its path.
+    The route handler stores the path in the DB so subsequent requests are
+    served directly from disk without regenerating.
+    """
     patient_id = patient.get("id", "unknown")
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     pdf_path = PDF_DIR / f"patient_{patient_id}_{ts}.pdf"
@@ -267,6 +300,7 @@ async def generate_pdf(patient: dict, bhw_name: str) -> str:
 
 
 def _parse_conditions(raw) -> list:
+    """Deserialise top_conditions from a JSON string or pass through a list."""
     if isinstance(raw, list):
         return raw
     try:
@@ -276,6 +310,7 @@ def _parse_conditions(raw) -> list:
 
 
 def _parse_soap(raw) -> dict:
+    """Deserialise soap_notes from a JSON string or pass through a dict."""
     if isinstance(raw, dict):
         return raw
     try:
@@ -285,6 +320,22 @@ def _parse_soap(raw) -> dict:
 
 
 def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str, enrichments: list | None = None) -> None:
+    """
+    Build and write the ReportLab PDF to pdf_path.
+
+    Sections rendered in order:
+      1. Navy header with GEMMA branding
+      2. Triage badge (RED / YELLOW / GREEN) with action label
+      3. Patient information grid + vitals
+      4. Chief complaint (bullet-formatted)
+      5. Top N differential diagnoses
+      6. Follow-up Q&A (if collected)
+      7. SOAP note table
+      8. Image findings (if provided)
+      9. Additional Clinical Notes — MedGemma enrichment per condition
+      10. Filipino disclaimer box
+      11. Footer with generation timestamp
+    """
     import html as _html
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
