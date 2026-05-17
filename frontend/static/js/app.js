@@ -10,6 +10,7 @@ const state = {
   screenHistory: [],
   patients: [],
   logFilter: 'ALL',
+  manualTriageLevel: null,
 };
 
 // ── Screen Management ──────────────────────────────────────────────────────
@@ -34,15 +35,16 @@ function showScreen(screenId, addToHistory = true) {
   const subtitle = document.getElementById('header-subtitle');
 
   const subtitles = {
-    'screen-intake':   'New Patient',
-    'screen-result':   'Triage Result',
-    'screen-summary':  'Handoff Summary',
-    'screen-log':      'Patient Log',
-    'screen-endshift': 'End Shift',
-    'screen-loading':  'Analyzing...',
+    'screen-intake':      'New Patient',
+    'screen-result':      'Triage Result',
+    'screen-summary':     'Handoff Summary',
+    'screen-log':         'Patient Log',
+    'screen-endshift':    'End Shift',
+    'screen-loading':     'Analyzing...',
+    'screen-pdf-viewer':  'Patient PDF',
   };
 
-  if (screenId === 'screen-home') {
+  if (screenId === 'screen-home' || screenId === 'screen-pdf-viewer') {
     header.classList.add('hidden');
     bottomNav.classList.add('hidden');
   } else {
@@ -297,16 +299,38 @@ async function submitTriage() {
 }
 
 function renderTriageResult(result) {
+  const isFallback = result.is_fallback === true;
+
+  const fallbackBanner = document.getElementById('fallback-banner');
+  const aiContent = document.getElementById('ai-result-content');
+  const btnRefine = document.getElementById('btn-refine-followup');
+  const btnSave = document.getElementById('btn-proceed-summary');
+
+  if (fallbackBanner) {
+    fallbackBanner.classList.toggle('hidden', !isFallback);
+    fallbackBanner.classList.toggle('flex', isFallback);
+  }
+  if (aiContent) aiContent.classList.toggle('hidden', isFallback);
+  if (btnRefine) btnRefine.classList.toggle('hidden', isFallback);
+  if (btnSave) {
+    btnSave.disabled = isFallback;
+    btnSave.textContent = isFallback ? '💾 Save with Manual Level' : '✅ Skip & Save Patient';
+  }
+
+  if (isFallback) return;
+
   // Render chief complaint as bullet list
   const complaintEl = document.getElementById('result-complaint-list');
   if (complaintEl) renderComplaintBullets(readComplaint(), complaintEl);
 
   const condList = document.getElementById('conditions-list');
   condList.innerHTML = '';
-  const PLACEHOLDER = 'additional assessment needed';
-  const realConditions = (result.top_conditions || []).filter(
-    c => c.condition.trim().toLowerCase() !== PLACEHOLDER
-  );
+  const _COND_SKIP = new Set(['additional assessment needed', 'n/a', 'na', 'unable to assess']);
+  const _COND_FALLBACK = /^condition\s*\d+$/i;
+  const realConditions = (result.top_conditions || []).filter(c => {
+    const name = (c.condition || '').trim();
+    return name && !_COND_SKIP.has(name.toLowerCase()) && !_COND_FALLBACK.test(name);
+  });
   const heading = document.getElementById('conditions-heading');
   if (heading) heading.textContent = `Top ${realConditions.length} Possible Condition${realConditions.length !== 1 ? 's' : ''}`;
   realConditions.forEach((c, i) => {
@@ -315,7 +339,7 @@ function renderTriageResult(result) {
     el.innerHTML = `
       <div class="bg-navy text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">${i + 1}</div>
       <div>
-        <div class="font-semibold text-sm text-navy">${c.condition}</div>
+        <div class="font-bold text-sm text-navy">${c.condition}</div>
         <div class="text-xs text-gray-500 mt-0.5 leading-snug">${c.plain_explanation}</div>
       </div>`;
     condList.appendChild(el);
@@ -332,6 +356,59 @@ function renderTriageResult(result) {
         class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:border-navy focus:outline-none resize-none"></textarea>`;
     fqList.appendChild(el);
   });
+}
+
+function selectManualLevel(level) {
+  state.manualTriageLevel = level;
+  ['RED', 'YELLOW', 'GREEN'].forEach(l => {
+    const btn = document.getElementById(`manual-btn-${l.toLowerCase()}`);
+    if (btn) {
+      btn.classList.toggle('opacity-60', l !== level);
+      btn.classList.toggle('ring-4', l === level);
+      btn.classList.toggle('ring-white', l === level);
+      btn.classList.toggle('ring-offset-2', l === level);
+    }
+  });
+  const btnSave = document.getElementById('btn-proceed-summary');
+  if (btnSave) btnSave.disabled = false;
+}
+
+async function simulateAIFailure() {
+  const complaint = readComplaint() || 'Simulated patient complaint.';
+  const sexEl = document.querySelector('input[name="sex"]:checked');
+  const bpSys = document.getElementById('input-bp-sys')?.value.trim() || '';
+  const bpDia = document.getElementById('input-bp-dia')?.value.trim() || '';
+  const bp = bpSys && bpDia ? `${bpSys}/${bpDia}` : '';
+
+  showScreen('screen-loading', true);
+  startLoadingAnimation(false);
+
+  try {
+    const res = await fetch('/api/triage/test-fallback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chief_complaint: complaint,
+        age: parseInt(document.getElementById('input-age')?.value) || null,
+        sex: sexEl ? sexEl.value : null,
+        bp: bp || null,
+        temperature: document.getElementById('input-temp')?.value.trim() || null,
+        heart_rate: document.getElementById('input-hr')?.value.trim() || null,
+        spo2: document.getElementById('input-spo2')?.value.trim() || null,
+      }),
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const result = await res.json();
+    state.currentTriageResult = result;
+    state.manualTriageLevel = null;
+    stopLoadingAnimation();
+    renderTriageResult(result);
+    showScreen('screen-result');
+  } catch (err) {
+    stopLoadingAnimation();
+    showScreen('screen-intake');
+    showError(`Stress test failed: ${err.message}`);
+  }
 }
 
 async function refineWithFollowup() {
@@ -401,25 +478,42 @@ async function proceedToSummary() {
   const result = state.currentTriageResult;
   if (!result) return;
 
+  if (result.is_fallback && !state.manualTriageLevel) {
+    showToast('Please select a triage level (RED, YELLOW, or GREEN) before saving.');
+    return;
+  }
+
+  if (result.is_fallback && state.manualTriageLevel) {
+    result.triage_level = state.manualTriageLevel;
+    result.soap_summary = result.soap_summary || {};
+    result.soap_summary.P = `Refer to physician for evaluation. Manual triage level: ${state.manualTriageLevel}.`;
+  }
+
   const soap = result.soap_summary || {};
   document.getElementById('soap-s').textContent = soap.S || '';
   document.getElementById('soap-o').textContent = soap.O || '';
   document.getElementById('soap-p').textContent = soap.P || '';
 
   // Assessment — conditions as bullets + SOAP A as optional clinical note
-  const PLACEHOLDER = 'additional assessment needed';
-  const realConds = (result.top_conditions || []).filter(
-    c => c.condition.trim().toLowerCase() !== PLACEHOLDER
-  );
-  document.getElementById('soap-a-conditions').innerHTML = realConds.map(c =>
+  const _SUMMARY_SKIP = new Set(['additional assessment needed', 'n/a', 'na', 'unable to assess']);
+  const _SUMMARY_FALLBACK = /^condition\s*\d+$/i;
+  const realConds = (result.top_conditions || []).filter(c => {
+    const name = (c.condition || '').trim();
+    return name && !_SUMMARY_SKIP.has(name.toLowerCase()) && !_SUMMARY_FALLBACK.test(name);
+  });
+  // Assessment — SOAP A clinical text first (doctor-facing English), then ranked condition names only
+  const aItems = [];
+  if (soap.A) {
+    aItems.push(`<p class="text-sm text-gray-700 leading-relaxed mb-2">${soap.A}</p>`);
+  }
+  aItems.push(...realConds.map(c =>
     `<div class="flex gap-2 items-start text-sm">
-      <span class="text-navy font-bold flex-shrink-0 mt-0.5">•</span>
-      <span><span class="font-semibold text-gray-800">${c.condition}</span><span class="text-gray-500"> — ${c.plain_explanation}</span></span>
+      <span class="text-navy font-bold flex-shrink-0 mt-0.5">${c.rank}.</span>
+      <span class="font-bold text-gray-800">${c.condition}</span>
     </div>`
-  ).join('');
-  const noteEl = document.getElementById('soap-a-note');
-  if (soap.A) { noteEl.textContent = `Note: ${soap.A}`; noteEl.classList.remove('hidden'); }
-  else noteEl.classList.add('hidden');
+  ));
+  document.getElementById('soap-a-conditions').innerHTML = aItems.join('');
+  document.getElementById('soap-a-note').classList.add('hidden');
 
   const complaint = readComplaint();
   const name      = document.getElementById('input-name').value.trim() || null;
@@ -450,7 +544,7 @@ async function proceedToSummary() {
   // Triage level chip (small pill in chips row)
   const triageChipCfg = {
     RED:    { bg: 'bg-danger',  label: '✱ RED TRIAGE' },
-    YELLOW: { bg: 'bg-amber',   label: '⚡ YELLOW TRIAGE' },
+    YELLOW: { bg: 'bg-yellow-400',   label: '⚡ YELLOW TRIAGE' },
     GREEN:  { bg: 'bg-forest',  label: '● GREEN TRIAGE' },
   };
   const tc = triageChipCfg[result.triage_level] || triageChipCfg.YELLOW;
@@ -461,7 +555,7 @@ async function proceedToSummary() {
   // Full-width verdict panel
   const verdictCfg = {
     RED:    { bg: 'bg-danger',  level: 'RED',    action: 'CRITICAL — Refer to RHU / Hospital Immediately' },
-    YELLOW: { bg: 'bg-amber',   level: 'YELLOW', action: 'URGENT — See Doctor On-Site at BHS' },
+    YELLOW: { bg: 'bg-yellow-400',   level: 'YELLOW', action: 'URGENT — See Doctor On-Site at BHS' },
     GREEN:  { bg: 'bg-forest',  level: 'GREEN',  action: 'STABLE — Home Care / BHW-Managed' },
   };
   const vc = verdictCfg[result.triage_level] || verdictCfg.YELLOW;
@@ -504,27 +598,134 @@ async function proceedToSummary() {
       `Encounter ID: #GEM-${String(patient.id).padStart(4, '0')}`;
 
     showScreen('screen-summary');
+    startEnrichmentPolling(patient.id);
   } catch (err) {
     showError(`Could not save patient: ${err.message}`);
   }
 }
 
+function startEnrichmentPolling(patientId) {
+  const badge = document.getElementById('enrichment-status');
+  if (!badge) return;
+
+  badge.className = 'text-xs text-center px-2 py-1 rounded-lg bg-amber-50 text-amber-700';
+  badge.textContent = 'Preparing clinical notes for PDF...';
+  badge.classList.remove('hidden');
+
+  let attempts = 0;
+  const MAX_ATTEMPTS = 40; // 40 × 3s = 2 min max
+
+  const poll = setInterval(async () => {
+    attempts++;
+    try {
+      const res = await fetch(`/api/export/enrichment-status/${patientId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ready) {
+          clearInterval(poll);
+          badge.className = 'text-xs text-center px-2 py-1 rounded-lg bg-green-50 text-green-700';
+          badge.textContent = 'Clinical notes ready — PDF will generate instantly';
+          setTimeout(() => badge.classList.add('hidden'), 4000);
+        }
+      }
+    } catch (_) { /* network blip — keep polling */ }
+
+    if (attempts >= MAX_ATTEMPTS) {
+      clearInterval(poll);
+      badge.classList.add('hidden');
+    }
+  }, 3000);
+}
+
+let _pdfBlobUrl = null;
+let _pdfDirectUrl = null;
+
 async function generatePDF() {
   if (!state.currentPatientId) { showError('No patient saved yet.'); return; }
 
   const btn = document.getElementById('btn-generate-pdf');
-  btn.textContent = '⏳ Generating PDF...';
+  btn.textContent = '⏳ Generating...';
   btn.disabled = true;
 
+  _pdfDirectUrl = `/api/export/pdf/${state.currentPatientId}`;
+  const isAndroid = /Android/i.test(navigator.userAgent);
+
   try {
-    window.open(`/api/export/pdf/${state.currentPatientId}`, '_blank');
-    showToast('PDF generated! Opening in new tab...');
+    const res = await fetch(_pdfDirectUrl);
+    if (!res.ok) throw new Error(await res.text());
+
+    if (isAndroid) {
+      // Android can't render PDFs in iframes — show a tap-to-open link instead.
+      // A real anchor tap is never blocked by popup blockers.
+      _showAndroidPDFFallback(_pdfDirectUrl);
+    } else {
+      const blob = await res.blob();
+      if (_pdfBlobUrl) URL.revokeObjectURL(_pdfBlobUrl);
+      _pdfBlobUrl = URL.createObjectURL(blob);
+      _openPDFViewer(_pdfBlobUrl);
+    }
   } catch (err) {
     showError(`Could not generate PDF: ${err.message}`);
   } finally {
-    btn.textContent = '📄 Generate PDF Handoff';
+    btn.textContent = '↓ Generate PDF Handoff';
     btn.disabled = false;
   }
+}
+
+function _showAndroidPDFFallback(directUrl) {
+  const encounterId = document.getElementById('summary-encounter-id')?.textContent || '';
+  document.getElementById('pdf-viewer-title').textContent = encounterId;
+
+  const link = document.getElementById('pdf-open-link');
+  if (link) link.href = directUrl;
+
+  document.getElementById('pdf-viewer-loading').classList.add('hidden');
+  document.getElementById('pdf-iframe').classList.add('hidden');
+  document.getElementById('pdf-viewer-fallback').classList.remove('hidden');
+
+  showScreen('screen-pdf-viewer');
+}
+
+function _openPDFViewer(blobUrl) {
+  const encounterId = document.getElementById('summary-encounter-id')?.textContent || '';
+  document.getElementById('pdf-viewer-title').textContent = encounterId;
+
+  // Reset viewer state
+  const iframe  = document.getElementById('pdf-iframe');
+  const loading = document.getElementById('pdf-viewer-loading');
+  const fallback = document.getElementById('pdf-viewer-fallback');
+  iframe.classList.add('hidden');
+  loading.classList.remove('hidden');
+  fallback.classList.add('hidden');
+  iframe.src = '';
+
+  showScreen('screen-pdf-viewer');
+
+  // Load PDF — give the iframe 5 seconds to show content before showing fallback
+  let loaded = false;
+  iframe.onload = () => {
+    if (loaded) return;
+    loaded = true;
+    loading.classList.add('hidden');
+    iframe.classList.remove('hidden');
+  };
+  setTimeout(() => {
+    if (loaded) return;
+    loading.classList.add('hidden');
+    fallback.classList.remove('hidden');
+  }, 5000);
+
+  iframe.src = blobUrl;
+}
+
+function openPDFInTab() {
+  const url = _pdfDirectUrl || _pdfBlobUrl;
+  if (url) window.open(url, '_blank');
+}
+
+function closePDFViewer() {
+  // Go back to summary; don't add pdf-viewer to history again
+  showScreen('screen-summary', false);
 }
 
 function saveAndNewPatient() {
@@ -545,6 +746,7 @@ function clearIntakeForm() {
   state.currentTriageResult = null;
   state.currentPatientId = null;
   state.followupQA = null;
+  state.manualTriageLevel = null;
   document.getElementById('image-findings-card').classList.add('hidden');
 }
 
@@ -597,7 +799,7 @@ function renderPatientLog() {
   }
   empty.classList.add('hidden');
 
-  const dotColors  = { RED: 'bg-danger', YELLOW: 'bg-amber', GREEN: 'bg-forest' };
+  const dotColors  = { RED: 'bg-danger', YELLOW: 'bg-yellow-400', GREEN: 'bg-forest' };
   const statuses   = ['Pending', 'Seen', 'Referred', 'Sent Home'];
 
   filtered.slice().reverse().forEach(p => {
@@ -611,7 +813,7 @@ function renderPatientLog() {
     card.innerHTML = `
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2 min-w-0">
-          <div class="w-3 h-3 rounded-full flex-shrink-0 ${dotColors[p.triage_level] || 'bg-amber'}"></div>
+          <div class="w-3 h-3 rounded-full flex-shrink-0 ${dotColors[p.triage_level] || 'bg-yellow-400'}"></div>
           <span class="font-semibold text-sm truncate">${p.name || 'Anonymous'}</span>
           ${p.age ? `<span class="text-xs text-gray-400 flex-shrink-0">${p.age}${p.sex || ''}</span>` : ''}
         </div>
@@ -667,9 +869,7 @@ function prepareEndShift() {
 
   renderDonutChart(red, yellow, green);
 
-  if (state.shiftId) {
-    document.getElementById('btn-download-excel').href = `/api/export/excel/${state.shiftId}`;
-  }
+  // href no longer used — download handled by downloadExcel() via fetch+blob
 
   // Top conditions (color-coded)
   const condCounts = {};
@@ -695,6 +895,33 @@ function prepareEndShift() {
         </div>
         <span class="text-xs font-semibold text-gray-500 ml-2 flex-shrink-0">${count} case${count !== 1 ? 's' : ''}</span>
       </div>`).join('');
+  }
+}
+
+async function downloadExcel() {
+  if (!state.shiftId) return;
+  const btn = document.getElementById('btn-download-excel');
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Preparing...';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/export/excel/${state.shiftId}`);
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `GEMMA_Shift_Report_${state.shiftId}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Excel report downloaded!', 3000);
+  } catch (err) {
+    showError(`Could not download Excel report: ${err.message}`);
+  } finally {
+    btn.textContent = orig;
+    btn.disabled = false;
   }
 }
 

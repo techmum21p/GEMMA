@@ -1,7 +1,34 @@
+"""
+BHW Handoff PDF Generator — produces the doctor-facing patient handoff document.
+
+generate_pdf() is the public entry point.  It:
+  1. Fetches MedGemma enrichment data from the prefetch cache (or runs it now).
+  2. Calls _generate_with_reportlab() to build the PDF using ReportLab.
+
+The PDF contains:
+  - GEMMA header (navy) with Barangay Platero branding
+  - Triage level badge (colour-coded RED / YELLOW / GREEN) with action label
+  - Patient demographics and vitals
+  - Chief complaint (bullet-formatted)
+  - Top N differential diagnoses
+  - Follow-up Q&A if collected
+  - SOAP note (doctor-facing, English)
+  - Image findings from MedGemma (if image was provided)
+  - Additional Clinical Notes per condition (MedGemma enrichment physician section)
+  - Filipino-language disclaimer
+  - Footer with generation timestamp
+
+ReportLab is used instead of WeasyPrint because WeasyPrint requires system
+libraries (libcairo, libpango) that are not reliably available on a Windows
+laptop.  ReportLab is pure Python and installs without system dependencies.
+"""
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
+
+_PLACEHOLDER_COND = re.compile(r'^condition\s*\d+$', re.IGNORECASE)
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +151,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 
 def _build_html(patient: dict, bhw_name: str) -> str:
+    """Build the HTML string for a patient handoff document (unused — kept for reference)."""
     name    = patient.get("name") or "Not provided"
     age     = patient.get("age")
     sex_raw = patient.get("sex")
@@ -167,7 +195,12 @@ def _build_html(patient: dict, bhw_name: str) -> str:
     top_conditions = patient.get("top_conditions", [])
     if isinstance(top_conditions, str):
         top_conditions = json.loads(top_conditions)
-    top_conditions = [c for c in top_conditions if c.get("condition", "").lower() not in ("additional assessment needed", "n/a", "na")]
+    _SKIP = {"additional assessment needed", "n/a", "na", "unable to assess"}
+    top_conditions = [
+        c for c in top_conditions
+        if c.get("condition", "").lower() not in _SKIP
+        and not _PLACEHOLDER_COND.match(c.get("condition", "").strip())
+    ]
     conditions_html = ""
     for c in top_conditions:
         conditions_html += (
@@ -237,18 +270,72 @@ def _build_html(patient: dict, bhw_name: str) -> str:
     )
 
 
-def generate_pdf(patient: dict, bhw_name: str) -> str:
+async def generate_pdf(patient: dict, bhw_name: str) -> str:
+    """
+    Generate a ReportLab PDF handoff document for a triaged patient.
+
+    Fetches MedGemma enrichment (clinical notes per condition) from the
+    prefetch cache if available, then builds the PDF and returns its path.
+    The route handler stores the path in the DB so subsequent requests are
+    served directly from disk without regenerating.
+    """
     patient_id = patient.get("id", "unknown")
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     pdf_path = PDF_DIR / f"patient_{patient_id}_{ts}.pdf"
 
-    _generate_with_reportlab(patient, bhw_name, str(pdf_path))
+    # Build triage_output dict from patient record for MedGemma enrichment
+    triage_output = {
+        "triage_level": patient.get("triage_level", ""),
+        "triage_reason": patient.get("triage_reason", ""),
+        "top_conditions": _parse_conditions(patient.get("top_conditions", "[]")),
+        "soap_summary": _parse_soap(patient.get("soap_notes", "{}")),
+    }
+    from app.services.enrichment_cache import get_or_fetch
+    enrichments = await get_or_fetch(triage_output)
+
+    _generate_with_reportlab(patient, bhw_name, str(pdf_path), enrichments)
     logger.info(f"PDF generated: {pdf_path}")
 
     return str(pdf_path)
 
 
-def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str) -> None:
+def _parse_conditions(raw) -> list:
+    """Deserialise top_conditions from a JSON string or pass through a list."""
+    if isinstance(raw, list):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return []
+
+
+def _parse_soap(raw) -> dict:
+    """Deserialise soap_notes from a JSON string or pass through a dict."""
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {"S": "", "O": "", "A": "", "P": ""}
+
+
+def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str, enrichments: list | None = None) -> None:
+    """
+    Build and write the ReportLab PDF to pdf_path.
+
+    Sections rendered in order:
+      1. Navy header with GEMMA branding
+      2. Triage badge (RED / YELLOW / GREEN) with action label
+      3. Patient information grid + vitals
+      4. Chief complaint (bullet-formatted)
+      5. Top N differential diagnoses
+      6. Follow-up Q&A (if collected)
+      7. SOAP note table
+      8. Image findings (if provided)
+      9. Additional Clinical Notes — MedGemma enrichment per condition
+      10. Filipino disclaimer box
+      11. Footer with generation timestamp
+    """
     import html as _html
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -359,7 +446,12 @@ def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str) -> Non
     if isinstance(top_conds, str):
         try:    top_conds = json.loads(top_conds)
         except: top_conds = []
-    top_conds = [c for c in top_conds if c.get("condition", "").lower() not in ("additional assessment needed", "n/a", "na")]
+    _SKIP_CONDS = {"additional assessment needed", "n/a", "na", "unable to assess"}
+    top_conds = [
+        c for c in top_conds
+        if c.get("condition", "").lower() not in _SKIP_CONDS
+        and not _PLACEHOLDER_COND.match(c.get("condition", "").strip())
+    ]
 
     fq_raw = patient.get("followup_qa", "{}")
     try:    fq = json.loads(fq_raw) if isinstance(fq_raw, str) else fq_raw
@@ -492,10 +584,7 @@ def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str) -> Non
         RANK_W = 0.7 * cm
         COND_W = W - RANK_W
         for c in top_conds:
-            cond_markup = (
-                f'<b>{e(c.get("condition", ""))}</b><br/>'
-                f'<font size="8" color="#555555">{e(c.get("plain_explanation", ""))}</font>'
-            )
+            cond_markup = f'<b>{e(c.get("condition", ""))}</b>'
             cond_style = ps(f"CN{c.get('rank','')}", leading=13, leftIndent=8)
             row_tbl = Table(
                 [[Paragraph(str(c.get("rank", "")), RANK_PS),
@@ -572,7 +661,76 @@ def _generate_with_reportlab(patient: dict, bhw_name: str, pdf_path: str) -> Non
         story.append(img_tbl)
         story.append(Spacer(1, 0.3 * cm))
 
-    # 9. DISCLAIMER — full-width, yellow box, text wraps properly
+    # 9. ADDITIONAL CLINICAL NOTES (MedGemma — compact, one row per condition)
+    valid_enrichments = [
+        enr for enr in (enrichments or [])
+        if enr.get("condition")
+        and not _PLACEHOLDER_COND.match(enr.get("condition", "").strip())
+        and enr.get("condition", "").lower() not in _SKIP_CONDS
+    ]
+    if valid_enrichments:
+        ENRICH_LBL = ps("ENRICH_LBL", fontName="Helvetica-Bold", fontSize=7.5,
+                        textColor=NAVY, leading=11)
+        ENRICH_VAL = ps("ENRICH_VAL", fontSize=8, leading=12)
+        ENRICH_HDR = ps("ENRICH_HDR", fontName="Helvetica-Bold", fontSize=9,
+                        textColor=WHITE, leading=12)
+        DANGER_PS  = ps("DANGER_PS",  fontSize=8, textColor=colors.HexColor("#C0392B"),
+                        leading=12)
+
+        story.append(KeepTogether([
+            section("Additional Clinical Notes (MedGemma AI)"),
+            Spacer(1, 0.15 * cm),
+        ]))
+
+        EL = 3.0 * cm
+        EV = W - EL
+
+        _NONE_VALS = {'none', 'n/a', 'na', 'not applicable', 'not available', '-', '—', 'nil'}
+
+        def _enrich_val(raw: str) -> str:
+            v = e(raw or "").strip()
+            return "" if v.lower() in _NONE_VALS else v
+
+        for enr in valid_enrichments:
+            cond_name = e(enr.get("condition", ""))
+            summary = _enrich_val(enr.get("clinical_summary") or enr.get("clinical_reasoning", ""))
+            workup  = _enrich_val(enr.get("priority_workup")  or enr.get("suggested_workup", ""))
+            flags   = _enrich_val(enr.get("red_flags", ""))
+
+            hdr_tbl = Table([[Paragraph(cond_name, ENRICH_HDR)]], colWidths=[W])
+            hdr_tbl.setStyle(TableStyle([
+                ("BACKGROUND",    (0, 0), (-1, -1), NAVY),
+                ("TOPPADDING",    (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ]))
+
+            detail_rows = []
+            if summary:
+                detail_rows.append([Paragraph("Summary", ENRICH_LBL), Paragraph(summary, ENRICH_VAL)])
+            if workup:
+                detail_rows.append([Paragraph("Key Tests", ENRICH_LBL), Paragraph(workup, ENRICH_VAL)])
+            if flags:
+                detail_rows.append([Paragraph("Watch For", ENRICH_LBL), Paragraph(flags, DANGER_PS)])
+
+            if detail_rows:
+                detail_tbl = Table(detail_rows, colWidths=[EL, EV])
+                detail_tbl.setStyle(TableStyle([
+                    ("BACKGROUND",    (0, 0), (0, -1), LIGHT),
+                    ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+                    ("TOPPADDING",    (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("LEFTPADDING",   (0, 0), (0, -1),  7),
+                    ("LEFTPADDING",   (1, 0), (1, -1),  8),
+                    ("RIGHTPADDING",  (1, 0), (1, -1),  6),
+                    ("GRID",          (0, 0), (-1, -1), 0.5, GRID),
+                ]))
+                story.append(KeepTogether([hdr_tbl, detail_tbl]))
+                story.append(Spacer(1, 0.1 * cm))
+
+        story.append(Spacer(1, 0.2 * cm))
+
+    # 10. DISCLAIMER — full-width, yellow box, text wraps properly
     disc_tbl = Table([[Paragraph(
         "[!]  Para sa kaalaman ng BHW at doktor lamang. "
         "Hindi ito opisyal na medikal na rekord. "

@@ -55,3 +55,13 @@ CLAUDE.md
 GEMMA_PRD.md
 SESSION_NOTES.md
 STITCH_PROMPT.md
+docs/superpowers/
+
+# Claude Code local settings and memory
+.claude/
+
+# Stitch design tool output
+stitch_gemma_triage_assistant/
+
+# Backup files
+*.bak.py

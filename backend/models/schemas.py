@@ -1,3 +1,17 @@
+"""
+Pydantic request and response schemas for all GEMMA API endpoints.
+
+Organised by domain:
+  Triage   — TriageRequest, TriageResponse, Condition, SoapNote
+  Image    — ImageAnalysisResponse
+  Patients — PatientCreate, PatientOut, PatientStatusUpdate
+  Shifts   — ShiftStart, ShiftOut
+  Email    — EmailRequest
+
+TriageResponse.is_fallback signals that Gemma 4 output could not be parsed
+and the BHW needs to select a triage level manually.  The frontend shows an
+amber banner and a RED/YELLOW/GREEN selector when this flag is True.
+"""
 from __future__ import annotations
 
 import json
@@ -35,6 +49,7 @@ class TriageResponse(BaseModel):
     followup_questions: list[str]
     soap_summary: SoapNote
     disclaimer: str
+    is_fallback: bool = False
 
 
 # ── Image ─────────────────────────────────────────────────────────────────────

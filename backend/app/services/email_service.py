@@ -1,3 +1,15 @@
+"""
+Shift report email sender.
+
+send_shift_report() emails the Excel shift report to the barangay health
+coordinator using smtplib over STARTTLS.  Credentials are read from .env
+(SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD).
+
+If SMTP credentials are not configured the function returns False and the
+route handler returns 503 — the BHW is informed with a clear error message
+rather than a silent failure.  This keeps email optional: GEMMA works fully
+offline and only phones home when the BHW explicitly triggers the send.
+"""
 import logging
 import smtplib
 from email.mime.application import MIMEApplication
@@ -11,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def _build_body(shift: dict, patients: list[dict]) -> str:
+    """Build the plain-text email body with shift summary statistics in Filipino."""
     total = len(patients)
     red = sum(1 for p in patients if p.get("triage_level") == "RED")
     yellow = sum(1 for p in patients if p.get("triage_level") == "YELLOW")
@@ -56,6 +69,13 @@ GEMMA — Guided Emergency & Medical Management Assistant
 
 
 def send_shift_report(shift: dict, patients: list[dict], excel_path: str) -> bool:
+    """
+    Email the Excel shift report to the coordinator and return True on success.
+
+    Attaches the .xlsx file, sends via smtplib STARTTLS.
+    Returns False (no exception raised) if credentials are missing or SMTP fails —
+    the route handler converts this to a 503 response with a Filipino error message.
+    """
     if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
         logger.warning("SMTP credentials not configured. Skipping email.")
         return False

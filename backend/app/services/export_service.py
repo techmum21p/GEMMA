@@ -1,3 +1,21 @@
+"""
+Excel Shift Report Generator.
+
+generate_excel_report() produces a two-sheet .xlsx file using Pandas and
+openpyxl:
+
+  Sheet 1 — Patient Log
+    One row per patient with triage level colour-coded (RED / YELLOW / GREEN)
+    and all differential diagnoses listed in the Mga Posibleng Kondisyon column.
+
+  Sheet 2 — Shift Summary
+    Aggregate statistics: patient counts by triage level with percentages,
+    shift start/end times, BHW name, and the top 3 most common conditions
+    across the shift (useful for barangay health surveillance).
+
+Files are written to exports/reports/ and the path is returned for the route
+handler to stream as a file download or email attachment.
+"""
 import json
 import logging
 from collections import Counter
@@ -21,6 +39,13 @@ TRIAGE_COLORS = {
 
 
 def generate_excel_report(shift: dict, patients: list[dict]) -> str:
+    """
+    Generate the shift Excel report and return the file path.
+
+    Builds Patient Log and Shift Summary DataFrames, writes them via Pandas
+    ExcelWriter, then applies openpyxl styling (navy headers, triage colour
+    fills, column widths, text wrapping).
+    """
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     safe_name = shift.get("bhw_name", "BHW").replace(" ", "_")
     file_path = EXPORT_DIR / f"shift_{safe_name}_{ts}.xlsx"
@@ -36,24 +61,31 @@ def generate_excel_report(shift: dict, patients: list[dict]) -> str:
         else:
             conditions = top_conditions
 
-        top_condition = conditions[0]["condition"] if conditions else "—"
+        all_conditions = "\n".join(
+            f"{c.get('rank', idx + 1)}. {c['condition']}"
+            for idx, c in enumerate(conditions)
+        ) if conditions else "—"
 
         timestamp = p.get("timestamp", "")
         if hasattr(timestamp, "strftime"):
-            time_str = timestamp.strftime("%H:%M")
+            time_str = timestamp.strftime("%Y-%m-%d %H:%M")
         else:
             time_str = str(timestamp)[:16]
 
+        raw_pdf = p.get("pdf_path")
+        pdf_filename = Path(raw_pdf).name if raw_pdf else "—"
+
         rows.append({
             "#": i,
-            "Oras": time_str,
+            "Petsa at Oras": time_str,
             "Pangalan": p.get("name") or "—",
             "Edad": p.get("age") or "—",
             "Kasarian": p.get("sex") or "—",
             "Chief Complaint": p.get("chief_complaint", ""),
             "Triage Level": p.get("triage_level", ""),
-            "Nangungunang Kondisyon": top_condition,
+            "Mga Posibleng Kondisyon": all_conditions,
             "Status": p.get("status", "Pending"),
+            "PDF Handoff": pdf_filename,
         })
 
     df_patients = pd.DataFrame(rows)
@@ -123,6 +155,7 @@ def generate_excel_report(shift: dict, patients: list[dict]) -> str:
 
 
 def _style_patient_sheet(ws, df: pd.DataFrame) -> None:
+    """Apply navy header, triage level colour fills, and column widths to the Patient Log sheet."""
     header_fill = PatternFill(start_color="1B3A6B", end_color="1B3A6B", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, size=11)
 
@@ -141,12 +174,17 @@ def _style_patient_sheet(ws, df: pd.DataFrame) -> None:
             triage_cell.fill = triage_fills[level]
             triage_cell.font = Font(color="FFFFFF", bold=True)
 
-    col_widths = [4, 8, 20, 6, 8, 35, 14, 30, 12]
+    col_widths = [4, 18, 20, 6, 8, 35, 14, 45, 12, 36]
     for i, width in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = width
 
+    for row_num in range(2, ws.max_row + 1):
+        ws.cell(row=row_num, column=8).alignment = Alignment(wrap_text=True, vertical="top")
+        ws.cell(row=row_num, column=10).alignment = Alignment(wrap_text=True, vertical="top")
+
 
 def _style_summary_sheet(ws) -> None:
+    """Apply navy section header rows and column widths to the Shift Summary sheet."""
     bold_rows = {1, 7, 13}
     header_fill = PatternFill(start_color="1B3A6B", end_color="1B3A6B", fill_type="solid")
 
