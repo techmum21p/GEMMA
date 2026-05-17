@@ -515,7 +515,9 @@ GEMMA/
 ## Hackathon
 
 **Competition:** Kaggle × Google DeepMind — Gemma 4 Good Hackathon 2026
+
 **Demo scenario:** Barangay Platero Health Center, City of Biñan, Laguna, Philippines
+
 **Track:** Health & Sciences
 
 ---
