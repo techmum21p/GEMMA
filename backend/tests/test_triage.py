@@ -2,7 +2,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.services.triage_service import _parse_triage_json, run_triage
+from app.services.triage_service import _parse_triage_json, _DEFAULT_FOLLOWUP, run_triage
 from app.prompts.triage_prompt import TRIAGE_FALLBACK
 
 
@@ -75,13 +75,16 @@ def test_parse_valid_response():
 def test_parse_invalid_triage_level():
     bad = json.loads(VALID_RESPONSE)
     bad["triage_level"] = "PURPLE"
-    result = _parse_triage_json(json.dumps(bad))
-    assert result["triage_level"] == "YELLOW"
+    with pytest.raises(ValueError, match="Invalid triage level"):
+        _parse_triage_json(json.dumps(bad))
 
 
 def test_parse_missing_keys():
-    with pytest.raises((ValueError, KeyError)):
-        _parse_triage_json('{"triage_level": "RED"}')
+    # New parser fills missing fields with safe defaults rather than raising.
+    result = _parse_triage_json('{"triage_level": "RED"}')
+    assert result["triage_level"] == "RED"
+    assert result["top_conditions"] == []
+    assert result["followup_questions"] == list(_DEFAULT_FOLLOWUP)
 
 
 def test_parse_markdown_wrapped():
@@ -92,18 +95,7 @@ def test_parse_markdown_wrapped():
 
 @pytest.mark.asyncio
 async def test_run_triage_success():
-    with (
-        patch("app.services.triage_service._get_medgemma_llm") as mock_medgemma,
-        patch("app.services.triage_service._get_gemma_llm") as mock_gemma,
-    ):
-        mock_medgemma_llm = AsyncMock()
-        mock_medgemma_llm.ainvoke = AsyncMock(return_value=CLINICAL_TEXT)
-        mock_medgemma.return_value = mock_medgemma_llm
-
-        mock_gemma_llm = AsyncMock()
-        mock_gemma_llm.ainvoke = AsyncMock(return_value=VALID_RESPONSE)
-        mock_gemma.return_value = mock_gemma_llm
-
+    with patch("app.services.triage_service._call_gemma", new=AsyncMock(return_value=VALID_RESPONSE)):
         result = await run_triage(SAMPLE_PATIENT)
         assert result["triage_level"] in {"RED", "YELLOW", "GREEN"}
         assert len(result["top_conditions"]) == 5
@@ -111,18 +103,10 @@ async def test_run_triage_success():
 
 @pytest.mark.asyncio
 async def test_run_triage_fallback_on_error():
-    with (
-        patch("app.services.triage_service._get_medgemma_llm") as mock_medgemma,
-        patch("app.services.triage_service._get_gemma_llm") as mock_gemma,
+    with patch(
+        "app.services.triage_service._call_gemma",
+        new=AsyncMock(side_effect=Exception("Ollama unreachable")),
     ):
-        mock_medgemma_llm = AsyncMock()
-        mock_medgemma_llm.ainvoke = AsyncMock(side_effect=Exception("Ollama unreachable"))
-        mock_medgemma.return_value = mock_medgemma_llm
-
-        mock_gemma_llm = AsyncMock()
-        mock_gemma_llm.ainvoke = AsyncMock(side_effect=Exception("Ollama unreachable"))
-        mock_gemma.return_value = mock_gemma_llm
-
         result = await run_triage(SAMPLE_PATIENT)
         assert result["triage_level"] == "YELLOW"
         assert result.get("is_fallback") is True
