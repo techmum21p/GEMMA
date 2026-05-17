@@ -79,7 +79,7 @@ If `visual_impression` is `Cannot determine from image`, the injection shows tha
 - Initial assessment from Stage 1a (only present in Stage 2a — see below)
 - Follow-up Q&A answers (only present in Stage 2a)
 
-Gemma 4's system prompt (`GEMMA4_TRIAGE_SYSTEM_PROMPT`) runs ~100 lines and instructs a **7-step ordered reasoning process**:
+Gemma 4's system prompt (`GEMMA4_TRIAGE_SYSTEM_PROMPT`) opens with the `<|think|>` token, which activates Gemma 4's chain-of-thought reasoning mode. The model reasons internally before emitting the JSON output; `_parse_triage_json()` strips the thinking block (`<|channel>thought\n...<channel|>`) before parsing. The prompt runs ~100 lines and instructs a **7-step ordered reasoning process**:
 1. Demographics — how age and sex shift diagnosis probability
 2. Symptoms — each symptom individually and in combination
 3. Vitals — threshold crossings (BP, SpO2, HR, temp)
@@ -141,7 +141,17 @@ Gemma 4 returns a single JSON object (no markdown, no preamble):
 2. Strip markdown code fences if present
 3. `json.loads()` on the cleaned string
 4. If `JSONDecodeError` → `_repair_truncated_json()` attempts regex salvage: extracts `triage_level`, `triage_reason`, conditions, questions, and SOAP fields from partial output
-5. If repair also fails, or `triage_level ∉ {RED, YELLOW, GREEN}` → return `TRIAGE_FALLBACK` immediately (hardcoded YELLOW, "Unable to assess" × 5). No retry.
+5. If repair also fails, or `triage_level ∉ {RED, YELLOW, GREEN}` → `ValueError` is raised and propagates to the caller (`_run_initial_triage` or `_run_refined_triage`), which catches any exception and returns `_build_fallback_with_patient_data(patient_data)`. No retry.
+
+`_build_fallback_with_patient_data()` produces a patient-aware fallback: SOAP fields are auto-populated from available patient data (complaint, Q&A answers, vitals) and `is_fallback: True` is set. The `top_conditions` list is taken from the hardcoded `TRIAGE_FALLBACK` constant ("Unable to assess" × 5). This is distinct from returning `TRIAGE_FALLBACK` directly.
+
+### `is_fallback` and Frontend Behavior
+
+`TriageResponse` includes `is_fallback: bool = False`. It is set to `True` only by `_build_fallback_with_patient_data()`. When the frontend receives `is_fallback: True`, it shows:
+- An amber banner: "Hindi ma-process ang AI assessment. Kailangan ng manu-manong pagtukoy ng triage level."
+- A manual RED / YELLOW / GREEN selector so the BHW can assign the level themselves
+
+Network failures (`_call_gemma()` throws), malformed JSON that survives repair, and invalid triage levels all route through `_build_fallback_with_patient_data()` and therefore set `is_fallback: True`.
 
 ---
 
@@ -276,7 +286,12 @@ The competition is Kaggle × Google DeepMind — Gemma 4 Good. Gemma 4 as the pr
 | MedGemma omits the `Category:` tag | `_extract_image_category()` keyword-scans full text; falls back to OTHER if no match |
 | MedGemma Visual Impression = "Cannot determine from image" | Injected explicitly; clinical context block still added for domain guidance; Gemma 4 ignores the visual impression |
 | Gemma 4 returns malformed JSON | `_parse_triage_json()` strips thinking block and fences, then `_repair_truncated_json()` regex-salvages what arrived |
-| Repair also fails or invalid triage_level | Immediate return of `TRIAGE_FALLBACK` (YELLOW, "Unable to assess" × 5, default questions). No retry. |
+| Repair also fails or invalid triage_level | `ValueError` propagates; caller returns `_build_fallback_with_patient_data(patient_data)` — YELLOW, patient-aware SOAP, `is_fallback: True`, "Unable to assess" × 5. No retry. |
+| `is_fallback: True` received by frontend | Amber banner displayed; manual RED / YELLOW / GREEN selector shown for BHW to assign triage level |
 | MedGemma enrichment fails | PDF generates without clinical notes section; warning logged; non-fatal |
-| Ollama unreachable (any stage) | HTTP exception propagates to API route; frontend shows error state |
+| Ollama unreachable (any stage) | HTTP exception propagates; caller returns `_build_fallback_with_patient_data()` with `is_fallback: True`; frontend shows amber banner |
 | PDF already generated for patient | `GET /api/export/pdf/{id}` serves existing file from disk; MedGemma enrichment is NOT re-run |
+
+### Demo: `POST /api/triage/test-fallback`
+
+A dedicated endpoint for demoing the fallback system without triggering a real Ollama call. It feeds the hardcoded broken JSON string (`_STRESS_TEST_BROKEN_JSON`) through the real `_parse_triage_json()` chain, which correctly rejects it, then always returns `_build_fallback_with_patient_data()` with `is_fallback: True`. Safe to call repeatedly. No DB writes.
