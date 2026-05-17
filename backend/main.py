@@ -14,14 +14,29 @@ from app.db.database import init_db
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 logger = logging.getLogger(__name__)
 
+_BANNER = """
+╔══════════════════════════════════════════════════════════════╗
+║       GEMMA — Guided Emergency & Medical Management          ║
+║         Barangay Platero Health Center, City of Biñan        ║
+║         Kaggle × Google DeepMind Gemma 4 Good 2026          ║
+╚══════════════════════════════════════════════════════════════╝
+"""
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Initializing database...")
+    print(_BANNER)
+    logger.info("━━━ GEMMA startup sequence initiated ━━━")
+    logger.info(f"  Ollama base URL : {settings.OLLAMA_BASE_URL}")
+    logger.info(f"  Primary model   : {settings.GEMMA_MODEL}")
+    logger.info(f"  Image model     : {settings.MEDGEMMA_MODEL}")
+    logger.info(f"  Database        : {settings.DATABASE_URL}")
+    logger.info("  Initializing SQLite database…")
     await init_db()
-    logger.info("Database ready.")
+    logger.info("  ✓ Database ready")
+    logger.info("━━━ GEMMA is ready — BHWs can now start triaging patients ━━━")
     yield
-    logger.info("Shutting down GEMMA.")
+    logger.info("━━━ GEMMA shutting down ━━━")
 
 
 app = FastAPI(

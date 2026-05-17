@@ -11,9 +11,23 @@ The two models never call each other. MedGemma's output is structured text that 
 
 ---
 
+## Image Input: Camera Capture and Gallery Upload
+
+Two input paths lead to Stage 0. Both are available on the intake screen as side-by-side buttons.
+
+**Camera capture** (`camera-input`, `capture="environment"`) — Opens the device's rear camera directly. On Android Chrome this activates the camera shutter; the BHW points at the wound, lesion, or affected area and photographs it on the spot.
+
+**Gallery upload** (`gallery-input`, no `capture` attribute) — Opens the device photo library so the BHW can select an existing photo (e.g., taken at the patient's home before arriving at the health center). Works as a standard file picker on desktop as well.
+
+Both inputs pass the selected file to `_processImageFile()` in `camera.js`, which reads it as a base64 data URL and sets `state.capturedImage`. Stage 0 receives the same base64 payload regardless of which input was used.
+
+**Extended MIME detection** — The original `file.type.startsWith('image/')` guard was insufficient for HEIC/HEIF files from iPhone cameras and some Android phones where the MIME type may be reported as `application/octet-stream`. The check now also tests the filename extension against `/\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/`. iOS photos transferred by cable or AirDrop will pass the guard correctly.
+
+---
+
 ## Stage 0 — MedGemma: Visual Specialist
 
-**Trigger:** BHW captures a photo at intake. Runs before any triage call.
+**Trigger:** BHW captures or uploads a photo at intake. Runs before any triage call.
 **File:** `app/services/image_service.py` → `analyze_image()`
 **Call:** Direct `httpx` POST to Ollama `/api/generate` with base64 image array. Temperature 0.1. No lock acquired (intentional — runs before the triage lock window).
 
@@ -214,7 +228,7 @@ Both `_call_gemma()` (Stages 1a and 2a) and `enrich_triage()` (PDF enrichment) a
 ## End-to-End Flow
 
 ```
-BHW captures photo (optional)
+BHW captures photo OR uploads from gallery (optional)
         │
         ▼
 [Stage 0] MedGemma — visual specialist
@@ -295,3 +309,25 @@ The competition is Kaggle × Google DeepMind — Gemma 4 Good. Gemma 4 as the pr
 ### Demo: `POST /api/triage/test-fallback`
 
 A dedicated endpoint for demoing the fallback system without triggering a real Ollama call. It feeds the hardcoded broken JSON string (`_STRESS_TEST_BROKEN_JSON`) through the real `_parse_triage_json()` chain, which correctly rejects it, then always returns `_build_fallback_with_patient_data()` with `is_fallback: True`. Safe to call repeatedly. No DB writes.
+
+---
+
+## Export & Reporting Enhancements
+
+### PDF Handoff Column in Excel Patient Log
+
+The Patient Log sheet (Sheet 1) of the shift Excel report now includes a **"PDF Handoff"** column (column 10). It shows the filename of the generated handoff PDF for each patient (e.g., `handoff_12.pdf`), or `—` if no PDF was generated during the shift. The cell is text-wrapped and auto-sized. Coordinators who receive the Excel report via email can use this column as a direct cross-reference to the individual PDF handoff documents.
+
+**Implementation:** `generate_excel_report()` in `export_service.py` extracts `Path(patient["pdf_path"]).name` when `pdf_path` is set; falls back to `"—"` otherwise. The column width list was extended to 10 entries and wrap-text alignment applied to column 10.
+
+### Fetch+Blob Excel Download (Mobile-Compatible)
+
+The "Download Excel Report" button was previously an `<a id="btn-download-excel" href="...">` anchor. On some Android browsers, anchor-based file downloads open in the current tab instead of saving to Downloads.
+
+The button is now a `<button>` that calls `downloadExcel()` in `app.js`. The function:
+1. Fetches `/api/export/excel/{shift_id}` via `fetch()`
+2. Converts the response to a `Blob`
+3. Creates a temporary `<a>` element with `a.download = "GEMMA_Shift_Report_..."` and a local object URL
+4. Programmatically clicks it, then removes it and revokes the URL
+
+This ensures the file is saved to the device's Downloads folder on Android Chrome without navigating away from the app. The button shows `⏳ Preparing...` and is disabled during the fetch to prevent double-taps.

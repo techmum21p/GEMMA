@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 
 import httpx
 
@@ -12,6 +13,12 @@ from app.prompts.triage_prompt import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _stage_header(stage: str, description: str) -> None:
+    line = f"  GEMMA PIPELINE │ {stage}: {description}"
+    border = "─" * max(60, len(line) + 2)
+    logger.info(f"\n┌{border}┐\n│{line.ljust(len(border))}│\n└{border}┘")
 
 _DEFAULT_FOLLOWUP = [
     "Gaano na katagal ang mga sintomas mo?",
@@ -72,6 +79,11 @@ async def _call_gemma(
     temperature: float = 1.0,
 ) -> str:
     """Direct Ollama API call — guarantees num_predict and num_ctx are honored."""
+    logger.info(
+        f"  → Sending prompt to {settings.GEMMA_MODEL} "
+        f"({len(prompt)} chars | num_predict={num_predict} | temp={temperature})"
+    )
+    t0 = time.perf_counter()
     async with ollama_lock.get():
         async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(
@@ -91,7 +103,10 @@ async def _call_gemma(
                 },
             )
             resp.raise_for_status()
-            return resp.json().get("response", "").strip()
+            raw = resp.json().get("response", "").strip()
+    elapsed = time.perf_counter() - t0
+    logger.info(f"  ✓ {settings.GEMMA_MODEL} responded in {elapsed:.2f}s — {len(raw)} chars returned")
+    return raw
 
 
 def _normalize_condition(c: dict, idx: int) -> dict:
@@ -216,20 +231,49 @@ async def _run_initial_triage(patient_data: dict) -> dict:
     followup_questions are now generated in the same inference as the triage,
     eliminating the separate Stage 1b call.
     """
+    _stage_header("Stage 1a", "Initial Triage Assessment — Gemma 4 E4B")
+    complaint = (patient_data.get("chief_complaint") or "")[:80]
+    age = patient_data.get("age") or "?"
+    sex = patient_data.get("sex") or "?"
+    vitals = []
+    if patient_data.get("bp"):
+        vitals.append(f"BP={patient_data['bp']}")
+    if patient_data.get("temperature"):
+        vitals.append(f"Temp={patient_data['temperature']}")
+    if patient_data.get("heart_rate"):
+        vitals.append(f"HR={patient_data['heart_rate']}")
+    if patient_data.get("spo2"):
+        vitals.append(f"SpO2={patient_data['spo2']}%")
+    if patient_data.get("image_findings"):
+        vitals.append("image_findings=YES")
+    logger.info(f"  → Patient  : age={age}, sex={sex}, complaint=\"{complaint}\"")
+    if vitals:
+        logger.info(f"  → Vitals   : {', '.join(vitals)}")
+
+    t0 = time.perf_counter()
     try:
         triage_prompt = build_gemma4_triage_prompt(patient_data)
         raw = await _call_gemma(triage_prompt, num_predict=4096, num_ctx=8192, temperature=1.0)
-        logger.info(f"[Stage 1a] Gemma 4 triage ({len(raw)} chars): {raw[:500]}")
 
+        parse_t0 = time.perf_counter()
         result = _parse_triage_json(raw)
+        logger.info(f"  → JSON parsed in {time.perf_counter() - parse_t0:.3f}s")
+
+        elapsed = time.perf_counter() - t0
+        level = result["triage_level"]
+        top1 = result["top_conditions"][0]["condition"] if result.get("top_conditions") else "N/A"
+        num_qs = len(result.get("followup_questions") or [])
         logger.info(
-            f"Initial triage done: level={result['triage_level']}, "
-            f"qs={len(result['followup_questions'])}"
+            f"  ✓ Stage 1a complete in {elapsed:.2f}s\n"
+            f"    Triage level   : {level}\n"
+            f"    Top condition  : {top1}\n"
+            f"    Follow-up Qs   : {num_qs} generated"
         )
         return result
 
     except Exception as e:
-        logger.error(f"Initial triage failed: {e}. Returning fallback.")
+        elapsed = time.perf_counter() - t0
+        logger.error(f"  ✗ Stage 1a failed after {elapsed:.2f}s: {e} — activating fallback")
         return _build_fallback_with_patient_data(patient_data)
 
 
@@ -239,26 +283,45 @@ async def _run_refined_triage(patient_data: dict) -> dict:
     Kicks off MedGemma enrichment prefetch as a background task so PDF
     generation can use the cached result instead of waiting.
     """
+    _stage_header("Stage 2a", "Refined Triage with Q&A Answers — Gemma 4 E4B")
+    qa = patient_data.get("followup_answers") or {}
+    logger.info(f"  → Q&A answers received: {len(qa)} responses")
+    for q, a in list(qa.items())[:3]:
+        logger.info(f"    Q: {str(q)[:60]}  →  A: {str(a)[:60]}")
+
+    t0 = time.perf_counter()
     try:
         triage_prompt = build_gemma4_triage_prompt(patient_data)
         raw = await _call_gemma(triage_prompt, num_predict=4096, num_ctx=8192, temperature=1.0)
-        logger.info(f"[Stage 2a] Gemma 4 refined triage ({len(raw)} chars): {raw[:500]}")
 
+        parse_t0 = time.perf_counter()
         result = _parse_triage_json(raw)
-        result["followup_questions"] = []  # Q&A phase complete
-        logger.info(f"Refined triage done: level={result['triage_level']}")
+        logger.info(f"  → JSON parsed in {time.perf_counter() - parse_t0:.3f}s")
 
-        # Pre-fetch MedGemma enrichment in background — PDF will use cache
+        result["followup_questions"] = []
+        elapsed = time.perf_counter() - t0
+        level = result["triage_level"]
+        top1 = result["top_conditions"][0]["condition"] if result.get("top_conditions") else "N/A"
+        logger.info(
+            f"  ✓ Stage 2a complete in {elapsed:.2f}s\n"
+            f"    Final triage level : {level}\n"
+            f"    Top condition      : {top1}\n"
+            f"    SOAP note          : generated"
+        )
+
+        logger.info("  → Launching MedGemma enrichment prefetch in background (for PDF)…")
         try:
             from app.services.enrichment_cache import prefetch
             prefetch(result)
+            logger.info("  ✓ Enrichment prefetch task started")
         except Exception as cache_err:
-            logger.warning(f"Enrichment prefetch failed to start: {cache_err}")
+            logger.warning(f"  ⚠ Enrichment prefetch failed to start: {cache_err}")
 
         return result
 
     except Exception as e:
-        logger.error(f"Refined triage failed: {e}. Returning fallback.")
+        elapsed = time.perf_counter() - t0
+        logger.error(f"  ✗ Stage 2a failed after {elapsed:.2f}s: {e} — activating fallback")
         return _build_fallback_with_patient_data(patient_data)
 
 
@@ -268,6 +331,8 @@ async def run_triage(patient_data: dict) -> dict:
     Initial triage (no followup_answers): Stage 1a only — questions included in same call.
     Refined triage (has followup_answers): Stage 2a + background enrichment prefetch.
     """
+    stage = "Stage 2a (refined)" if patient_data.get("followup_answers") else "Stage 1a (initial)"
+    logger.info(f"  ▶ run_triage called → routing to {stage}")
     if patient_data.get("followup_answers"):
         return await _run_refined_triage(patient_data)
     return await _run_initial_triage(patient_data)
