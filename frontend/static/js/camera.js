@@ -12,6 +12,18 @@ function handleCameraCapture(event) {
   event.target.value = '';
 }
 
+function openGallery() {
+  const galleryInput = document.getElementById('gallery-input');
+  galleryInput.click();
+}
+
+function handleGalleryUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  _processImageFile(file);
+  event.target.value = '';
+}
+
 function handleFileSelect(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -20,7 +32,10 @@ function handleFileSelect(event) {
 }
 
 function _processImageFile(file) {
-  if (!file.type.startsWith('image/')) {
+  const mimeType = file.type || '';
+  const fileName = (file.name || '').toLowerCase();
+  const isImage = mimeType.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/.test(fileName);
+  if (!isImage) {
     if (typeof showError === 'function') showError('Mangyaring pumili ng larawan (JPG, PNG, etc.).');
     return;
   }

@@ -233,10 +233,14 @@
       </div>
 
       <div class="flex gap-3">
-        <button onclick="openCamera()"
-          class="w-full bg-navy text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform text-sm">
+        <label for="camera-input"
+          class="flex-1 bg-navy text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform text-sm cursor-pointer">
           📷 Take Photo
-        </button>
+        </label>
+        <label for="gallery-input"
+          class="flex-1 bg-white border-2 border-navy text-navy font-semibold py-3 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform text-sm cursor-pointer">
+          🖼 Upload
+        </label>
       </div>
     </div>
 
@@ -256,6 +260,7 @@
 
   </div>
   <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleCameraCapture(event)" />
+  <input id="gallery-input" type="file" accept="image/*" class="hidden" onchange="handleGalleryUpload(event)" />
 </div>
 
 <!-- ════════════════════════════════════════════════════════════════ -->
@@ -588,10 +593,10 @@
 
     <!-- Actions -->
     <div class="flex flex-col gap-3">
-      <a id="btn-download-excel" href="#" target="_blank"
-        class="w-full bg-forest text-white font-display font-bold py-4 rounded-2xl text-base text-center block active:scale-95 transition-transform">
+      <button id="btn-download-excel" onclick="downloadExcel()"
+        class="w-full bg-forest text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform">
         📥 Download Excel Report
-      </a>
+      </button>
       <button onclick="confirmEndShift()"
         class="w-full bg-danger text-white font-display font-bold py-4 rounded-2xl text-base active:scale-95 transition-transform">
         ✔ FINISH & CLOSE SHIFT

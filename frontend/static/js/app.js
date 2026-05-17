@@ -845,9 +845,7 @@ function prepareEndShift() {
 
   renderDonutChart(red, yellow, green);
 
-  if (state.shiftId) {
-    document.getElementById('btn-download-excel').href = `/api/export/excel/${state.shiftId}`;
-  }
+  // href no longer used — download handled by downloadExcel() via fetch+blob
 
   // Top conditions (color-coded)
   const condCounts = {};
@@ -873,6 +871,33 @@ function prepareEndShift() {
         </div>
         <span class="text-xs font-semibold text-gray-500 ml-2 flex-shrink-0">${count} case${count !== 1 ? 's' : ''}</span>
       </div>`).join('');
+  }
+}
+
+async function downloadExcel() {
+  if (!state.shiftId) return;
+  const btn = document.getElementById('btn-download-excel');
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Preparing...';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/export/excel/${state.shiftId}`);
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `GEMMA_Shift_Report_${state.shiftId}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Excel report downloaded!', 3000);
+  } catch (err) {
+    showError(`Could not download Excel report: ${err.message}`);
+  } finally {
+    btn.textContent = orig;
+    btn.disabled = false;
   }
 }
 
