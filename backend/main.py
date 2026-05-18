@@ -31,7 +31,7 @@ _BANNER = """
 ╔══════════════════════════════════════════════════════════════╗
 ║       GEMMA — Guided Emergency & Medical Management          ║
 ║         Barangay Platero Health Center, City of Biñan        ║
-║         Kaggle × Google DeepMind Gemma 4 Good 2026          ║
+║         Kaggle × Google DeepMind Gemma 4 Good 2026           ║
 ╚══════════════════════════════════════════════════════════════╝
 """
 

@@ -112,6 +112,7 @@ async def export_excel(shift_id: str, db: AsyncSession = Depends(get_db)):
         path=excel_path,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename=Path(excel_path).name,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
 
 

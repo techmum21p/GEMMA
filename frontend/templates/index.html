@@ -250,14 +250,6 @@
       🔍 ASSESS WITH GEMMA
     </button>
 
-    <!-- Demo stress-test trigger -->
-    <div class="px-0 pb-1 text-center">
-      <button onclick="simulateAIFailure()"
-        class="text-xs text-gray-400 underline underline-offset-2 active:text-gray-600 py-4">
-        Simulate AI Failure
-      </button>
-    </div>
-
   </div>
   <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleCameraCapture(event)" />
   <input id="gallery-input" type="file" accept="image/*" class="hidden" onchange="handleGalleryUpload(event)" />
@@ -523,7 +515,7 @@
       <div class="text-sm">No patients yet this shift.</div>
     </div>
 
-    <button onclick="showScreen('screen-endshift'); prepareEndShift();"
+    <button onclick="prepareEndShift(); showScreen('screen-endshift');"
       class="w-full bg-danger text-white font-display font-bold py-4 rounded-2xl text-base">
       🔴 End Shift
     </button>
