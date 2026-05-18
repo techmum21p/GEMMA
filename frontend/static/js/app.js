@@ -47,6 +47,15 @@ function showScreen(screenId, addToHistory = true) {
   if (screenId === 'screen-home' || screenId === 'screen-pdf-viewer') {
     header.classList.add('hidden');
     bottomNav.classList.add('hidden');
+  } else if (screenId === 'screen-endshift') {
+    header.classList.remove('hidden');
+    subtitle.textContent = subtitles[screenId] || 'GEMMA';
+    bottomNav.classList.add('hidden');
+    if (state.shiftId) {
+      document.getElementById('shift-info-header').classList.remove('hidden');
+      document.getElementById('header-bhw-name').textContent = state.bhwName || '';
+      updatePatientCountBadge();
+    }
   } else {
     header.classList.remove('hidden');
     subtitle.textContent = subtitles[screenId] || 'GEMMA';

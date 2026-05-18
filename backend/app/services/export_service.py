@@ -72,8 +72,8 @@ def generate_excel_report(shift: dict, patients: list[dict]) -> str:
         else:
             time_str = str(timestamp)[:16]
 
-        raw_pdf = p.get("pdf_path")
-        pdf_filename = Path(raw_pdf).name if raw_pdf else "—"
+        pdf_path = p.get("pdf_path") or ""
+        pdf_filename = Path(pdf_path).name if pdf_path else "—"
 
         rows.append({
             "#": i,
@@ -85,7 +85,7 @@ def generate_excel_report(shift: dict, patients: list[dict]) -> str:
             "Triage Level": p.get("triage_level", ""),
             "Mga Posibleng Kondisyon": all_conditions,
             "Status": p.get("status", "Pending"),
-            "PDF Handoff": pdf_filename,
+            "PDF Filename": pdf_filename,
         })
 
     df_patients = pd.DataFrame(rows)
@@ -174,7 +174,7 @@ def _style_patient_sheet(ws, df: pd.DataFrame) -> None:
             triage_cell.fill = triage_fills[level]
             triage_cell.font = Font(color="FFFFFF", bold=True)
 
-    col_widths = [4, 18, 20, 6, 8, 35, 14, 45, 12, 36]
+    col_widths = [4, 18, 20, 6, 8, 35, 14, 45, 12, 35]
     for i, width in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = width
 
