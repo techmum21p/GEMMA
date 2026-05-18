@@ -6,15 +6,15 @@
 
 ---
 
-## The Reality No Hackathon Slide Deck Should Ignore
+## Why I Built This: The Triage Gap in Philippine Barangay Health
 
 The Philippines has over 42,000 barangays [[1]](https://www.dilg.gov.ph/facts-and-figures/Regional-and-Provincial-Summary-Number-of-Provinces-Cities-Municipalities-and-Barangays-as-of-30-September-2020/32), each served by a Barangay Health Station staffed not by physicians, but by Barangay Health Workers (BHWs) — community volunteers, not licensed clinicians. Doctors rotate from municipal health offices, visiting as infrequently as once a week [[2]](https://www.rappler.com/voices/ispeak/opinion-barangay-health-workers-need-more-than-recognition/). Under Republic Act 7883 [[3]](https://www.officialgazette.gov.ph/1995/02/20/republic-act-no-7883/), the DOH recommends one BHW per 20 households; in practice, a single health worker routinely manages 200 to 300 [[2]](https://www.rappler.com/voices/ispeak/opinion-barangay-health-workers-need-more-than-recognition/), in a system strained by chronic medicine shortages and inadequate infrastructure [[4]](https://pids.gov.ph/details/ph-lags-behind-asean-neighbors-in-terms-of-critical-health-outcome-access-indicators-pids-study). Half of all Filipinos cannot reach a primary care facility within 30 minutes [[5]](https://www.gmanetwork.com/news/topstories/nation/785638/half-of-filipinos-can-t-access-primary-healthcare-facilities-within-30-mins-doh/story/).
 
-When a patient arrives between doctor visits — with chest pain, an infected wound, or a child with convulsions — the BHW must make a judgment call: manage at the station, refer to the Rural Health Unit, or send urgently to the hospital. GEMMA was built for exactly this moment — not to replace the physician, but to give the BHW structured clinical intelligence for that call, and to hand the doctor a proper SOAP-format assessment when they arrive.
+When a patient arrives between doctor visits — with chest pain, an infected wound, or a child with convulsions — the BHW must make a judgment call: manage at the station, refer to the Rural Health Unit, or send urgently to the hospital. GEMMA was built for this moment — not to replace the physician, but to give the BHW structured clinical intelligence and hand the doctor a proper SOAP-format assessment when they arrive.
 
 ---
 
-## What GEMMA Does
+## What I Built: An Offline Triage Assistant for Barangay Health Workers
 
 **GEMMA — Guided Emergency & Medical Management Assistant** — is an offline-first Progressive Web App that gives BHWs AI-powered triage support in Filipino and Taglish, running entirely on local hardware. The AI backend (FastAPI + Ollama) runs on a shared station laptop; the BHW uses their Android phone over local Wi-Fi. No router beyond the laptop's hotspot. No ISP. No cloud dependency.
 
@@ -22,7 +22,7 @@ A BHW enters a patient's chief complaint, then captures a photo on the spot or s
 
 ---
 
-## The AI Architecture: Two Models, Two Roles, One Safe Pipeline
+## How I Designed the AI: Two Gemma Models, Separated Responsibilities
 
 GEMMA's core innovation is deploying two Gemma-family models with strictly separated responsibilities — making each model's contribution auditable and every failure mode safe.
 
@@ -34,7 +34,7 @@ Both models run locally via **Ollama**.
 
 ---
 
-### Why Ollama Makes This Deployable
+### Why I Chose Ollama: Gemma 4 Running Locally in Two Commands
 
 Ollama is the reason GEMMA can exist outside a research lab. Getting both models onto a barangay health station laptop requires exactly two commands:
 
@@ -43,11 +43,11 @@ ollama pull gemma4:e4b
 ollama pull medgemma:4b
 ```
 
-No GPU. No cloud account. No API key. No Docker. No dependency chain. Ollama ships as a single binary for macOS, Windows, and Linux, installs in minutes, and serves a local REST API at `http://localhost:11434` the moment `ollama serve` runs. That is the only external process GEMMA's FastAPI backend depends on — Gemma 4 inference uses `langchain-ollama`; MedGemma's multimodal image calls go directly to Ollama's `/api/generate` via `httpx`.
+No GPU, cloud account, API key, Docker, or dependency chain. Ollama ships as a single binary, installs in minutes, and serves a local REST API the moment `ollama serve` runs. That is the only external process GEMMA's FastAPI backend depends on — Gemma 4 inference uses `langchain-ollama`; MedGemma's multimodal image calls go directly to Ollama's `/api/generate` via `httpx`.
 
-For a tool meant to run in Barangay Platero, this matters enormously. The person setting up the station laptop is not a DevOps engineer — it may be the BHW supervisor or a municipal health volunteer. Ollama's zero-configuration setup means the entire AI backend is running in under ten minutes by anyone who can follow a README. No inference server to configure, no CUDA driver conflicts, no firewall rules for an external API. The models are on disk, Ollama serves them, and GEMMA calls them — locally, offline, and reliably.
+For Barangay Platero, this matters enormously. The person setting up is not a DevOps engineer — it may be the BHW supervisor or a municipal health volunteer. Ollama's zero-configuration setup means the entire AI backend is running in under ten minutes by anyone who can follow a README. No inference server to configure, no CUDA driver conflicts, no firewall rules. The models are on disk, Ollama serves them, and GEMMA calls them — locally, offline, and reliably.
 
-On tested hardware (16GB RAM laptop, Apple M2, no discrete GPU), a full Gemma 4 E4B triage inference completes in 35–40 seconds — well within the consultation window, and fast enough that the BHW can record vitals while the model reasons.
+On tested hardware (24GB RAM, Apple M4, no discrete GPU), a full Gemma 4 E4B triage inference completes in 35–40 seconds — well within the consultation window, and fast enough that the BHW can record vitals while the model reasons. For Windows deployment, 24GB RAM is the recommended minimum — 16GB leaves insufficient headroom with OS overhead and both models resident.
 
 ---
 
@@ -67,7 +67,7 @@ The defining innovation is **confidence-gated image weighting**. MedGemma's Visu
 
 Gemma 4 also runs a **non-negotiable red-flag check** on every encounter. If stroke, TIA, MI, sepsis, or anaphylaxis appears in the differential and symptoms support it, the system prompt explicitly prohibits assigning below RED. The model cannot reason its way to YELLOW on a probable stroke.
 
-Follow-up questions are **co-generated in the same Stage 1a call** — no additional inference, no added latency. Questions must target genuine clinical information gaps in conversational Taglish, and may never re-ask about symptoms already stated.
+Follow-up questions are **co-generated in the same Stage 1a call** — no added latency. Questions target genuine clinical gaps in Taglish and may never re-ask symptoms already stated.
 
 ---
 
@@ -75,11 +75,11 @@ Follow-up questions are **co-generated in the same Stage 1a call** — no additi
 
 When the BHW submits answers, **Gemma 4 re-reasons the full differential with the initial assessment and Q&A context — potentially revising the triage level, reordering conditions, or updating the SOAP note.**
 
-Immediately after a successful Stage 2a, **MedGemma enrichment fires as a background asyncio task**, pre-warming the PDF cache. By the time the BHW clicks "Generate PDF," MedGemma has already annotated each confirmed diagnosis with a clinical summary, priority workup tests, and specific red flags for escalation. The PDF generates without waiting — the enrichment happened while the health worker was still with the patient.
+Immediately after Stage 2a, **MedGemma enrichment fires as a background asyncio task**. By the time the BHW clicks "Generate PDF," MedGemma has already annotated each diagnosis with a clinical summary, priority workup tests, and escalation red flags — the PDF generates without waiting.
 
 ---
 
-## Engineering for Failure, Not Success
+## Challenges I Solved: Safe Degradation When the AI Stumbles
 
 A BHW in a remote barangay has no retry budget — a failed triage is a patient left with no answer.
 
@@ -90,10 +90,10 @@ MedGemma failures are equally non-fatal: image analysis failure means triage pro
 
 ---
 
-## Conclusion: Intelligence Where It Has Never Reached Before
+## My Impact: Clinical Intelligence Where No Doctor Can Reach
 
-GEMMA is built for the constraints of Philippine barangay health stations: no internet required, a shared laptop as the only compute, a BHW's Android phone as the interface, life-or-death decisions without a physician present.
+GEMMA is built for the constraints of Philippine barangay health stations: no internet, a shared laptop, a BHW's Android phone as the interface, life-or-death decisions without a physician.
 
-**By pairing MedGemma's clinical vision with Gemma 4's structured reasoning** — and by engineering every failure mode to degrade safely rather than silently — GEMMA delivers triage decision support that is genuinely deployable where it is needed most. Not as a proof of concept. As a tool a BHW can open on a phone in Barangay Platero and trust.
+**By pairing MedGemma's clinical vision with Gemma 4's structured reasoning** — and by engineering every failure mode to degrade safely rather than silently — GEMMA delivers triage decision support deployable where needed most. Not as a proof of concept. As a tool a BHW can open on a phone in Barangay Platero and trust.
 
 The five minutes between a patient arriving and a triage decision have always belonged to the BHW alone. GEMMA puts structured clinical intelligence in those five minutes — offline, in Filipino, on a phone.
