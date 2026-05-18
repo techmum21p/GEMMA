@@ -914,7 +914,7 @@ async function downloadExcel() {
   btn.textContent = '⏳ Preparing...';
   btn.disabled = true;
   try {
-    const res = await fetch(`/api/export/excel/${state.shiftId}`);
+    const res = await fetch(`/api/export/excel/${state.shiftId}?t=${Date.now()}`);
     if (!res.ok) throw new Error(`Server error ${res.status}`);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
