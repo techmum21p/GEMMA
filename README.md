@@ -55,7 +55,7 @@ Both models run locally via **Ollama** — zero cloud dependency.
 |---|---|---|
 | Python | 3.11+ | 3.12 recommended |
 | Ollama | Latest | Must be running before starting GEMMA |
-| RAM | 8 GB | 16 GB+ recommended for smoother inference |
+| RAM | 16 GB | 24 GB recommended — both models must fit in memory alongside the OS |
 | Storage | ~8 GB free | ~3 GB for `gemma4:e4b`, ~4 GB for `medgemma:4b` |
 | OS | Windows 10/11 or macOS 12+ | Linux also works |
 
@@ -279,7 +279,7 @@ GEMMA is a Progressive Web App (PWA) designed to be used on-site by BHWs on thei
 
 ### Option B — Mobile Hotspot (no router needed)
 
-This is the recommended setup for field use — the laptop creates a hotspot and the phone connects to it directly.
+This is the recommended setup for field use — the laptop creates a hotspot and the phone connects to it directly. No router, no ISP required.
 
 **macOS (Internet Sharing):**
 
@@ -287,16 +287,23 @@ This is the recommended setup for field use — the laptop creates a hotspot and
 2. Share from: **Wi-Fi** (or Ethernet if laptop has a cable)
 3. To devices using: **Wi-Fi**
 4. Turn on **Internet Sharing**
-5. Your Mac's hotspot IP is typically `192.168.2.1`
+5. Your Mac's hotspot IP is fixed at `192.168.2.1`
+6. On your phone's Chrome, open: `http://192.168.2.1:8000`
 
 **Windows (Mobile Hotspot):**
 
 1. Settings → Network & Internet → **Mobile hotspot**
 2. Toggle **Share my Internet connection** ON
-3. Note the hotspot name and password shown on screen
-4. Connect your phone to that hotspot
+3. Note the hotspot **name and password** shown on screen
+4. On your phone, connect to that hotspot via Wi-Fi settings
+5. Back on the laptop, open **PowerShell** and run:
+   ```powershell
+   ipconfig
+   ```
+   Look for the adapter named **"Local Area Connection\* x"** (the hotspot adapter) — note its **IPv4 Address**. It is almost always `192.168.137.1` on Windows.
+6. On your phone's Chrome, open: `http://192.168.137.1:8000`
 
-Once connected, find your laptop IP on the hotspot network and open it in Chrome on the phone. On Windows the hotspot IP is usually shown in the Mobile Hotspot settings page.
+> **Tip:** If the page doesn't load, check that Windows Firewall allows inbound connections on port 8000. See the Troubleshooting section below.
 
 ---
 
@@ -444,7 +451,7 @@ taskkill /PID <PID> /F
 **Slow inference / model loading**
 - First inference after startup loads the model into RAM — expect 30–60 seconds
 - Subsequent calls are faster (model stays loaded in Ollama)
-- If your machine has less than 16 GB RAM, close other applications
+- 24 GB RAM is recommended — on 16 GB machines, both models competing for memory alongside the OS will cause significant slowdowns or swap. Close all other applications.
 
 **PDF opens blank on mobile**
 - Tap the **"↗ All Pages"** button in the PDF viewer header to open it in a new tab
