@@ -287,8 +287,13 @@ This is the recommended setup for field use — the laptop creates a hotspot and
 2. Share from: **Wi-Fi** (or Ethernet if laptop has a cable)
 3. To devices using: **Wi-Fi**
 4. Turn on **Internet Sharing**
-5. Your Mac's hotspot IP is fixed at `192.168.2.1`
-6. On your phone's Chrome, open: `http://192.168.2.1:8000`
+5. Find your Mac's hotspot IP — open **Terminal** and run:
+   ```bash
+   ipconfig getifaddr bridge100
+   # or: ifconfig bridge100 | grep "inet "
+   ```
+   The IP shown is what your phone will use to reach the server.
+6. On your phone's Chrome, open: `http://<that-ip>:8000`
 
 **Windows (Mobile Hotspot):**
 
@@ -296,12 +301,12 @@ This is the recommended setup for field use — the laptop creates a hotspot and
 2. Toggle **Share my Internet connection** ON
 3. Note the hotspot **name and password** shown on screen
 4. On your phone, connect to that hotspot via Wi-Fi settings
-5. Back on the laptop, open **PowerShell** and run:
+5. Find your laptop's hotspot IP — open **PowerShell** and run:
    ```powershell
    ipconfig
    ```
-   Look for the adapter named **"Local Area Connection\* x"** (the hotspot adapter) — note its **IPv4 Address**. It is almost always `192.168.137.1` on Windows.
-6. On your phone's Chrome, open: `http://192.168.137.1:8000`
+   Look for the adapter named **"Local Area Connection\* x"** (the hotspot adapter) and note its **IPv4 Address**.
+6. On your phone's Chrome, open: `http://<that-ip>:8000`
 
 > **Tip:** If the page doesn't load, check that Windows Firewall allows inbound connections on port 8000. See the Troubleshooting section below.
 
