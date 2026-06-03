@@ -7,6 +7,9 @@ GEMMA is an AI-powered triage decision-support PWA built for **Barangay Health W
 
 Built for the **Kaggle × Google DeepMind — Gemma 4 Good Hackathon 2026**.
 
+# YouTube Videos
+https://www.youtube.com/@GenXAI-21
+
 ---
 
 ## What It Does
